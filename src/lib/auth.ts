@@ -41,7 +41,7 @@ declare module "@auth/core/jwt" {
   }
 }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+const nextAuth = NextAuth({
   ...authConfig,
   callbacks: {
     ...authConfig.callbacks,
@@ -130,3 +130,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
 });
+
+export const { handlers, signIn, signOut } = nextAuth;
+
+export async function auth() {
+  const { sessionFromMobileBearer } = await import("@/lib/mobile-auth");
+  const mobileSession = await sessionFromMobileBearer();
+  if (mobileSession) return mobileSession;
+  return nextAuth.auth();
+}
