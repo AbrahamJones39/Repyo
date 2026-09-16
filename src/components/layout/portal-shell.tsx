@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Network,
   Shield,
   Stethoscope,
   Users,
@@ -46,11 +47,12 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
     ],
   },
   company: {
-    title: "Company Dashboard",
+    title: "Admin",
     items: [
       { href: "/company", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
       { href: "/company/requests", label: "Requests", icon: <Stethoscope className="h-4 w-4" /> },
       { href: "/company/reps", label: "Reps", icon: <Users className="h-4 w-4" /> },
+      { href: "/company/organization", label: "Organization", icon: <Network className="h-4 w-4" /> },
       { href: "/company/authorization", label: "Authorization", icon: <Shield className="h-4 w-4" /> },
       { href: "/company/teams", label: "Teams", icon: <Users className="h-4 w-4" /> },
       { href: "/company/schedule", label: "Calendar", icon: <Calendar className="h-4 w-4" /> },

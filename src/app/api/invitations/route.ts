@@ -87,6 +87,8 @@ export async function POST(request: Request) {
   let organizationId: string | null = body.organizationId ?? null;
   let companyId: string | null = body.companyId ?? session.user.companyId ?? null;
   let teamId: string | null = body.teamId ?? null;
+  let orgUnitId: string | null = body.orgUnitId ?? null;
+  let managerId: string | null = body.managerId ?? null;
   let healthcareSiteId: string | null = body.healthcareSiteId ?? null;
   let invitationType: InvitationType = "PEER";
 
@@ -109,10 +111,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid invite role" }, { status: 400 });
     }
     teamId = teamId ?? inviter.teamMemberships[0]?.teamId ?? null;
+    if (targetRole === "REP") {
+      managerId = managerId ?? session.user.id;
+    }
   } else if (session.user.role === "COMPANY_ADMIN") {
     invitationType = "ADMIN";
     if (!["REP", "COMPANY_ADMIN"].includes(targetRole)) {
       targetRole = "REP";
+    }
+    if (targetRole === "REP") {
+      managerId = managerId ?? session.user.id;
+    }
+    if (targetRole === "COMPANY_ADMIN") {
+      orgUnitId = orgUnitId ?? inviter.orgUnitId ?? null;
+      if (!orgUnitId) {
+        return NextResponse.json(
+          { error: "Assign the Admin to an organizational unit" },
+          { status: 400 }
+        );
+      }
     }
   } else if (session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -129,9 +146,12 @@ export async function POST(request: Request) {
       organizationId,
       companyId,
       teamId,
+      orgUnitId,
+      managerId,
       healthcareSiteId,
       territoryContext: body.territoryContext,
       expiryDays: body.expiryDays,
+      adminPermissions: Array.isArray(body.permissions) ? body.permissions : undefined,
     });
 
     return NextResponse.json(

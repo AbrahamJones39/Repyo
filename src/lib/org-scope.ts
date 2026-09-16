@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import {
   ADMIN_PERMISSIONS,
+  DEFAULT_ADMIN_SCOPE_PERMISSIONS,
   hasAdminPermission,
   type SessionUser,
 } from "@/lib/security/authorization";
@@ -8,6 +9,7 @@ import {
 export type AdminScope = {
   companyId: string;
   unitIds: string[];
+  assignedUnitIds: string[];
   permissions: string[];
   isCompanyWide: boolean;
 };
@@ -20,6 +22,38 @@ export type OrgUnitNode = {
   sortOrder: number;
   children: OrgUnitNode[];
 };
+
+export async function ensureCompanyRootOrgUnit(
+  companyId: string,
+  companyName?: string
+): Promise<{ id: string }> {
+  const existing = await db.orgUnit.findFirst({
+    where: { companyId, parentId: null },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true },
+  });
+  if (existing) return existing;
+
+  const company =
+    companyName ??
+    (
+      await db.company.findUnique({
+        where: { id: companyId },
+        select: { name: true },
+      })
+    )?.name ??
+    "Company";
+
+  return db.orgUnit.create({
+    data: {
+      companyId,
+      name: company,
+      typeLabel: "Company",
+      sortOrder: 0,
+    },
+    select: { id: true },
+  });
+}
 
 export async function getDescendantUnitIds(
   companyId: string,
@@ -54,6 +88,33 @@ export async function getDescendantUnitIds(
   return [...seen];
 }
 
+export function flattenOrgUnits(nodes: OrgUnitNode[], depth = 0): {
+  id: string;
+  name: string;
+  typeLabel: string;
+  parentId: string | null;
+  depth: number;
+}[] {
+  const rows: {
+    id: string;
+    name: string;
+    typeLabel: string;
+    parentId: string | null;
+    depth: number;
+  }[] = [];
+  for (const node of nodes) {
+    rows.push({
+      id: node.id,
+      name: node.name,
+      typeLabel: node.typeLabel,
+      parentId: node.parentId,
+      depth,
+    });
+    rows.push(...flattenOrgUnits(node.children, depth + 1));
+  }
+  return rows;
+}
+
 export function buildOrgUnitTree(
   units: {
     id: string;
@@ -84,6 +145,11 @@ export function buildOrgUnitTree(
   return roots;
 }
 
+export function scopeHasPermission(scope: AdminScope | null, permission: string): boolean {
+  if (!scope) return false;
+  return scope.permissions.includes(permission);
+}
+
 export async function resolveAdminScope(user: SessionUser): Promise<AdminScope | null> {
   if (!user.companyId) return null;
   if (user.role === "SUPER_ADMIN") {
@@ -94,6 +160,7 @@ export async function resolveAdminScope(user: SessionUser): Promise<AdminScope |
     return {
       companyId: user.companyId,
       unitIds: all.map((u) => u.id),
+      assignedUnitIds: all.map((u) => u.id),
       permissions: Object.values(ADMIN_PERMISSIONS),
       isCompanyWide: true,
     };
@@ -122,39 +189,84 @@ export async function resolveAdminScope(user: SessionUser): Promise<AdminScope |
   for (const assignment of assignments) {
     assignment.permissions.forEach((p) => permissions.add(p));
   }
+  if (permissions.size === 0) {
+    DEFAULT_ADMIN_SCOPE_PERMISSIONS.forEach((p) => permissions.add(p));
+  }
 
   if (assignedUnitIds.length === 0) {
-    const all = await db.orgUnit.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true },
-    });
     return {
       companyId: user.companyId,
-      unitIds: all.map((u) => u.id),
+      unitIds: [],
+      assignedUnitIds: [],
       permissions: [...permissions],
-      isCompanyWide: true,
+      isCompanyWide: false,
     };
   }
 
   const unitIds = await getDescendantUnitIds(user.companyId, assignedUnitIds);
-  const companyRoots = await db.orgUnit.count({
+  const companyRoots = await db.orgUnit.findMany({
     where: { companyId: user.companyId, parentId: null },
+    select: { id: true },
   });
-  const assignedRoots = await db.orgUnit.count({
-    where: { id: { in: assignedUnitIds }, parentId: null },
-  });
+  const assignedRootSet = new Set(assignedUnitIds);
+  const isCompanyWide =
+    companyRoots.length > 0 && companyRoots.every((root) => assignedRootSet.has(root.id));
 
   return {
     companyId: user.companyId,
     unitIds,
+    assignedUnitIds,
     permissions: [...permissions],
-    isCompanyWide: companyRoots > 0 && assignedRoots === companyRoots,
+    isCompanyWide,
   };
 }
 
-export function scopeHasPermission(scope: AdminScope | null, permission: string): boolean {
-  if (!scope) return false;
-  return scope.permissions.includes(permission);
+export async function getDescendantUserIds(
+  managerId: string,
+  companyId?: string | null
+): Promise<string[]> {
+  const people = await db.user.findMany({
+    where: companyId
+      ? { companyId, id: { not: managerId } }
+      : { managerId: { not: null } },
+    select: { id: true, managerId: true },
+  });
+
+  const childrenByManager = new Map<string, string[]>();
+  for (const person of people) {
+    if (!person.managerId) continue;
+    const list = childrenByManager.get(person.managerId) ?? [];
+    list.push(person.id);
+    childrenByManager.set(person.managerId, list);
+  }
+
+  const reports: string[] = [];
+  const seen = new Set<string>([managerId]);
+  const queue = [managerId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const child of childrenByManager.get(current) ?? []) {
+      if (!seen.has(child)) {
+        seen.add(child);
+        reports.push(child);
+        queue.push(child);
+      }
+    }
+  }
+  return reports;
+}
+
+export async function getDescendantReportIds(
+  managerId: string,
+  companyId?: string | null
+): Promise<string[]> {
+  const descendantIds = await getDescendantUserIds(managerId, companyId);
+  if (descendantIds.length === 0) return [];
+  const reps = await db.user.findMany({
+    where: { id: { in: descendantIds }, role: "REP" },
+    select: { id: true },
+  });
+  return reps.map((r) => r.id);
 }
 
 export async function getScopedRepIds(
@@ -164,50 +276,43 @@ export async function getScopedRepIds(
   const resolved = scope ?? (await resolveAdminScope(user));
   if (!resolved) return [];
 
-  const inUnits = await db.user.findMany({
-    where: {
-      companyId: resolved.companyId,
-      role: "REP",
-      ...(resolved.isCompanyWide || resolved.unitIds.length === 0
-        ? {}
-        : { orgUnitId: { in: resolved.unitIds } }),
-    },
-    select: { id: true },
-  });
+  const unitFilter =
+    resolved.isCompanyWide
+      ? {}
+      : resolved.unitIds.length > 0
+        ? { orgUnitId: { in: resolved.unitIds } }
+        : { id: { in: [] as string[] } };
 
-  const teamMembers = resolved.isCompanyWide
-    ? []
-    : await db.companyTeamMember.findMany({
-        where: { team: { companyId: resolved.companyId, orgUnitId: { in: resolved.unitIds } } },
-        select: { userId: true },
-      });
+  const inUnits = resolved.isCompanyWide || resolved.unitIds.length > 0
+    ? await db.user.findMany({
+        where: {
+          companyId: resolved.companyId,
+          role: "REP",
+          ...unitFilter,
+        },
+        select: { id: true },
+      })
+    : [];
 
-  const reports = await getDescendantReportIds(user.id);
+  const teamMembers =
+    resolved.isCompanyWide || resolved.unitIds.length === 0
+      ? []
+      : await db.companyTeamMember.findMany({
+          where: {
+            team: { companyId: resolved.companyId, orgUnitId: { in: resolved.unitIds } },
+          },
+          select: { userId: true },
+        });
 
-  return [...new Set([...inUnits.map((u) => u.id), ...teamMembers.map((m) => m.userId), ...reports])];
-}
+  const reports = await getDescendantReportIds(user.id, resolved.companyId);
 
-export async function getDescendantReportIds(managerId: string): Promise<string[]> {
-  const reports: string[] = [];
-  const queue = [managerId];
-  const seen = new Set<string>([managerId]);
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const children = await db.user.findMany({
-      where: { managerId: current, role: "REP" },
-      select: { id: true },
-    });
-    for (const child of children) {
-      if (!seen.has(child.id)) {
-        seen.add(child.id);
-        reports.push(child.id);
-        queue.push(child.id);
-      }
-    }
-  }
-
-  return reports;
+  return [
+    ...new Set([
+      ...inUnits.map((u) => u.id),
+      ...teamMembers.map((m) => m.userId),
+      ...reports,
+    ]),
+  ];
 }
 
 export async function getReportingLadder(userId: string): Promise<
@@ -219,14 +324,16 @@ export async function getReportingLadder(userId: string): Promise<
 
   while (currentId && !seen.has(currentId)) {
     seen.add(currentId);
-    const user: { managerId: string | null; manager: { id: string; name: string; role: string } | null } | null =
-      await db.user.findUnique({
-        where: { id: currentId },
-        select: {
-          managerId: true,
-          manager: { select: { id: true, name: true, role: true } },
-        },
-      });
+    const user: {
+      managerId: string | null;
+      manager: { id: string; name: string; role: string } | null;
+    } | null = await db.user.findUnique({
+      where: { id: currentId },
+      select: {
+        managerId: true,
+        manager: { select: { id: true, name: true, role: true } },
+      },
+    });
     if (!user?.manager) break;
     ladder.push(user.manager);
     currentId = user.manager.id;
@@ -264,6 +371,15 @@ export async function requireRepManager(params: {
   return manager.id;
 }
 
+export async function assertOrgUnitInCompany(orgUnitId: string, companyId: string) {
+  const unit = await db.orgUnit.findFirst({
+    where: { id: orgUnitId, companyId },
+    select: { id: true, parentId: true, name: true },
+  });
+  if (!unit) throw new Error("Organizational unit not found in this company");
+  return unit;
+}
+
 export async function userIsInAdminScope(
   user: SessionUser,
   targetUserId: string,
@@ -271,6 +387,7 @@ export async function userIsInAdminScope(
 ): Promise<boolean> {
   const resolved = scope ?? (await resolveAdminScope(user));
   if (!resolved) return false;
+  if (targetUserId === user.id) return true;
   if (resolved.isCompanyWide) {
     const target = await db.user.findFirst({
       where: { id: targetUserId, companyId: resolved.companyId },
@@ -280,6 +397,8 @@ export async function userIsInAdminScope(
   }
   const scopedReps = await getScopedRepIds(user, resolved);
   if (scopedReps.includes(targetUserId)) return true;
+  const descendants = await getDescendantUserIds(user.id, resolved.companyId);
+  if (descendants.includes(targetUserId)) return true;
   const target = await db.user.findFirst({
     where: {
       id: targetUserId,
@@ -300,4 +419,17 @@ export function canViewOperationalMetrics(user: SessionUser, scope: AdminScope |
     hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REQUESTS) ||
     scopeHasPermission(scope, ADMIN_PERMISSIONS.MANAGE_REQUESTS)
   );
+}
+
+export function canManageOrgStructure(user: SessionUser, scope: AdminScope | null): boolean {
+  if (user.role === "SUPER_ADMIN") return true;
+  if (!scope) return false;
+  return (
+    hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_ORG_UNITS) ||
+    scopeHasPermission(scope, ADMIN_PERMISSIONS.MANAGE_ORG_UNITS)
+  );
+}
+
+export function unitInScope(scope: AdminScope, orgUnitId: string): boolean {
+  return scope.isCompanyWide || scope.unitIds.includes(orgUnitId);
 }

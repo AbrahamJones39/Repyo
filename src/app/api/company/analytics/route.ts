@@ -1,6 +1,12 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { toSessionUser } from "@/lib/security/sanitize-request";
+import {
+  canViewOperationalMetrics,
+  getScopedRepIds,
+  resolveAdminScope,
+} from "@/lib/org-scope";
 
 export async function GET() {
   const session = await auth();
@@ -13,8 +19,27 @@ export async function GET() {
     return NextResponse.json({ error: "No company assigned" }, { status: 400 });
   }
 
+  const user = toSessionUser(session.user);
+  const scope = await resolveAdminScope(user);
+  if (!canViewOperationalMetrics(user, scope)) {
+    return NextResponse.json(
+      { error: "You do not have permission to view operational metrics" },
+      { status: 403 }
+    );
+  }
+
+  const scopedRepIds = await getScopedRepIds(user, scope);
+  const requestWhere = {
+    companyId,
+    OR: [
+      { assignedAdminId: session.user.id },
+      { escalatedToId: session.user.id },
+      ...(scopedRepIds.length > 0 ? [{ assignedRepId: { in: scopedRepIds } }] : []),
+    ],
+  };
+
   const requests = await db.serviceRequest.findMany({
-    where: { companyId },
+    where: requestWhere,
     include: {
       assignedRep: { select: { name: true } },
       statusLogs: { orderBy: { createdAt: "asc" } },
@@ -28,6 +53,7 @@ export async function GET() {
   const active = requests.filter(
     (r) => !["COMPLETED", "CANCELLED"].includes(r.status)
   );
+  const escalated = requests.filter((r) => Boolean(r.escalatedToId)).length;
 
   const responseTimes: number[] = [];
   for (const req of completed) {
@@ -57,7 +83,14 @@ export async function GET() {
   }
 
   const reps = await db.repProfile.findMany({
-    where: { user: { companyId } },
+    where: {
+      user: {
+        companyId,
+        ...(scopedRepIds.length > 0 || !scope?.isCompanyWide
+          ? { id: { in: scopedRepIds } }
+          : {}),
+      },
+    },
     select: { status: true, credentialStatus: true },
   });
 
@@ -65,7 +98,9 @@ export async function GET() {
   const credentialedReps = reps.filter((r) => r.credentialStatus === "ACTIVE").length;
 
   const forwards = await db.requestForward.findMany({
-    where: { request: { companyId } },
+    where: {
+      request: requestWhere,
+    },
     include: {
       originalRep: { select: { id: true, name: true } },
       forwardedTo: { select: { id: true, name: true } },
@@ -87,6 +122,7 @@ export async function GET() {
       completed: completed.length,
       cancelled: cancelled.length,
       forwards: forwards.length,
+      escalated,
     },
     avgResponseMinutes,
     byProcedure: Object.entries(byProcedure)
@@ -102,5 +138,10 @@ export async function GET() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([route, count]) => ({ route, count })),
+    phiIncluded: false,
+    scope: {
+      isCompanyWide: scope?.isCompanyWide ?? false,
+      unitCount: scope?.unitIds.length ?? 0,
+    },
   });
 }

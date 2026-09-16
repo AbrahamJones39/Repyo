@@ -21,6 +21,7 @@ export const ADMIN_PERMISSIONS = {
   MANAGE_TEAMS: "MANAGE_TEAMS",
   VIEW_TEAM_CALENDAR: "VIEW_TEAM_CALENDAR",
   VIEW_METRICS: "VIEW_METRICS",
+  MANAGE_ORG_UNITS: "MANAGE_ORG_UNITS",
   MANAGE_INTEGRATIONS: "MANAGE_INTEGRATIONS",
   MANAGE_TERRITORY: "MANAGE_TERRITORY",
 } as const;
@@ -40,6 +41,14 @@ export const DEFAULT_ADMIN_SCOPE_PERMISSIONS = [
   ADMIN_PERMISSIONS.VIEW_CALENDAR,
   ADMIN_PERMISSIONS.VIEW_TEAM_CALENDAR,
   ADMIN_PERMISSIONS.MANAGE_REQUESTS,
+] as const;
+
+export const COMPANY_WIDE_ADMIN_PERMISSIONS = [
+  ...DEFAULT_ADMIN_SCOPE_PERMISSIONS,
+  ADMIN_PERMISSIONS.MANAGE_REPS,
+  ADMIN_PERMISSIONS.MANAGE_TEAMS,
+  ADMIN_PERMISSIONS.MANAGE_ORG_UNITS,
+  ADMIN_PERMISSIONS.MANAGE_TERRITORY,
 ] as const;
 
 export const SECURITY_PERMISSIONS = {
@@ -167,7 +176,7 @@ export function canAccessRequestRecord(
     companyId: string;
     escalatedToId?: string | null;
   },
-  options?: { delegatedAdminIds?: string[] }
+  options?: { delegatedAdminIds?: string[]; scopedRepIds?: string[] }
 ): boolean {
   if (user.role === "SUPER_ADMIN") return true;
   if (user.role === "PROVIDER" && request.providerId === user.id) return true;
@@ -185,10 +194,13 @@ export function canAccessRequestRecord(
     if (user.companyId !== request.companyId) return false;
     if (request.assignedAdminId === user.id) return true;
     if (request.escalatedToId === user.id) return true;
-    return (
-      hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REQUESTS) ||
-      hasAdminPermission(user, ADMIN_PERMISSIONS.VIEW_METRICS)
-    );
+    if (
+      request.assignedRepId &&
+      options?.scopedRepIds?.includes(request.assignedRepId)
+    ) {
+      return true;
+    }
+    return false;
   }
   return false;
 }

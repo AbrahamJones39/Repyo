@@ -46,7 +46,11 @@ export async function getManagedTeamIds(user: TeamScopeUser): Promise<string[]> 
       const teams = await db.companyTeam.findMany({
         where: {
           companyId: user.companyId,
-          ...(scope.isCompanyWide ? {} : { orgUnitId: { in: scope.unitIds } }),
+          ...(scope.isCompanyWide
+            ? {}
+            : scope.unitIds.length > 0
+              ? { orgUnitId: { in: scope.unitIds } }
+              : { id: { in: [] } }),
         },
         select: { id: true },
       });

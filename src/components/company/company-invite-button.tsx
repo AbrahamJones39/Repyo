@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { InviteModal } from "@/components/invitations/invite-modal";
 
 const COMPANY_INVITE_ROLES = [
-  { value: "REP" as const, label: "Field rep" },
-  { value: "COMPANY_ADMIN" as const, label: "Company admin" },
+  { value: "REP" as const, label: "Rep" },
+  { value: "COMPANY_ADMIN" as const, label: "Admin" },
 ];
 
 export function CompanyInviteButton({

@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dayName } from "@/lib/rep-availability";
 import { NextResponse } from "next/server";
+import { toSessionUser } from "@/lib/security/sanitize-request";
+import { getScopedRepIds, resolveAdminScope } from "@/lib/org-scope";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -13,6 +15,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const user = toSessionUser(session.user);
+  const scope = await resolveAdminScope(user);
+  const scopedRepIds = await getScopedRepIds(user, scope);
+
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month");
   const repId = searchParams.get("repId");
@@ -23,11 +29,26 @@ export async function GET(request: Request) {
   const rangeStart = new Date(year, monthIndex, 1);
   const rangeEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
+  if (repId && !scopedRepIds.includes(repId) && !scope?.isCompanyWide) {
+    return NextResponse.json({ error: "Rep is outside your scope" }, { status: 403 });
+  }
+
   const repWhere = {
     role: "REP" as const,
     companyId: session.user.companyId,
-    ...(repId ? { id: repId } : {}),
+    ...(repId
+      ? { id: repId }
+      : scopedRepIds.length > 0 || scope?.isCompanyWide
+        ? { id: { in: scopedRepIds } }
+        : { id: { in: [] as string[] } }),
   };
+
+  if (!repId && scopedRepIds.length === 0 && !scope?.isCompanyWide) {
+    return NextResponse.json({
+      month: `${year}-${String(monthIndex + 1).padStart(2, "0")}`,
+      reps: [],
+    });
+  }
 
   const reps = await db.user.findMany({
     where: repWhere,

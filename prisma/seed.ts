@@ -15,6 +15,7 @@ const DEMO_EMAILS = [
   "rep@demo.com",
   "rep2@demo.com",
   "rep3@demo.com",
+  "manager@demo.com",
   "admin@demo.com",
   "admin2@demo.com",
   "super@demo.com",
@@ -459,11 +460,19 @@ async function main() {
       credentialStatus: "ACTIVE" | "PENDING";
       onCallEnabled: boolean;
       territory: { state: string; county: string; zipCode: string };
-    }
+    },
+    reporting?: { managerId?: string; orgUnitId?: string }
   ) {
     const user = await db.user.upsert({
       where: { email },
-      update: { passwordHash, name, phone, companyId },
+      update: {
+        passwordHash,
+        name,
+        phone,
+        companyId,
+        ...(reporting?.managerId ? { managerId: reporting.managerId } : {}),
+        ...(reporting?.orgUnitId ? { orgUnitId: reporting.orgUnitId } : {}),
+      },
       create: {
         email,
         passwordHash,
@@ -471,6 +480,8 @@ async function main() {
         phone,
         role: "REP",
         companyId,
+        managerId: reporting?.managerId,
+        orgUnitId: reporting?.orgUnitId,
       },
     });
 
@@ -614,6 +625,9 @@ async function main() {
         "VIEW_CALENDAR",
         "MANAGE_TEAMS",
         "VIEW_TEAM_CALENDAR",
+        "VIEW_METRICS",
+        "MANAGE_ORG_UNITS",
+        "MANAGE_TERRITORY",
       ],
     },
     create: {
@@ -630,6 +644,9 @@ async function main() {
         "VIEW_CALENDAR",
         "MANAGE_TEAMS",
         "VIEW_TEAM_CALENDAR",
+        "VIEW_METRICS",
+        "MANAGE_ORG_UNITS",
+        "MANAGE_TERRITORY",
       ],
     },
   });
@@ -660,6 +677,157 @@ async function main() {
     });
   }
 
+  async function upsertOrgUnit(params: {
+    companyId: string;
+    name: string;
+    typeLabel: string;
+    parentId?: string | null;
+  }) {
+    const existing = await db.orgUnit.findFirst({
+      where: {
+        companyId: params.companyId,
+        name: params.name,
+        parentId: params.parentId ?? null,
+      },
+    });
+    if (existing) {
+      return db.orgUnit.update({
+        where: { id: existing.id },
+        data: { typeLabel: params.typeLabel },
+      });
+    }
+    return db.orgUnit.create({
+      data: {
+        companyId: params.companyId,
+        name: params.name,
+        typeLabel: params.typeLabel,
+        parentId: params.parentId ?? null,
+      },
+    });
+  }
+
+  const medtronicCompanyUnit = await upsertOrgUnit({
+    companyId: medtronic.id,
+    name: "Medtronic",
+    typeLabel: "Company",
+  });
+  const westDivision = await upsertOrgUnit({
+    companyId: medtronic.id,
+    name: "West",
+    typeLabel: "Division",
+    parentId: medtronicCompanyUnit.id,
+  });
+  const southwestRegion = await upsertOrgUnit({
+    companyId: medtronic.id,
+    name: "Southwest",
+    typeLabel: "Region",
+    parentId: westDivision.id,
+  });
+  const phoenixArea = await upsertOrgUnit({
+    companyId: medtronic.id,
+    name: "Phoenix",
+    typeLabel: "Area",
+    parentId: southwestRegion.id,
+  });
+  const phoenixTerritory = await upsertOrgUnit({
+    companyId: medtronic.id,
+    name: "Phoenix Cardiac",
+    typeLabel: "Territory",
+    parentId: phoenixArea.id,
+  });
+
+  await db.companyTeam.update({
+    where: { id: phoenixTeam.id },
+    data: { orgUnitId: phoenixTerritory.id },
+  });
+
+  const regionalManager = await db.user.upsert({
+    where: { email: "manager@demo.com" },
+    update: {
+      passwordHash,
+      companyId: medtronic.id,
+      managerId: medtronicAdmin!.id,
+      orgUnitId: southwestRegion.id,
+      ...verifiedUserDefaults,
+      adminPermissions: [
+        "VIEW_METRICS",
+        "MANAGE_REQUESTS",
+        "VIEW_CALENDAR",
+        "VIEW_TEAM_CALENDAR",
+        "MANAGE_REPS",
+      ],
+    },
+    create: {
+      email: "manager@demo.com",
+      passwordHash,
+      name: "Jordan Hale",
+      role: "COMPANY_ADMIN",
+      companyId: medtronic.id,
+      managerId: medtronicAdmin!.id,
+      orgUnitId: southwestRegion.id,
+      adminPermissions: [
+        "VIEW_METRICS",
+        "MANAGE_REQUESTS",
+        "VIEW_CALENDAR",
+        "VIEW_TEAM_CALENDAR",
+        "MANAGE_REPS",
+      ],
+    },
+  });
+
+  await db.orgUnitAssignment.upsert({
+    where: {
+      orgUnitId_userId: { orgUnitId: medtronicCompanyUnit.id, userId: medtronicAdmin!.id },
+    },
+    create: {
+      orgUnitId: medtronicCompanyUnit.id,
+      userId: medtronicAdmin!.id,
+      permissions: [
+        "VIEW_METRICS",
+        "MANAGE_REQUESTS",
+        "VIEW_CALENDAR",
+        "VIEW_TEAM_CALENDAR",
+        "MANAGE_REPS",
+        "MANAGE_TEAMS",
+        "MANAGE_ORG_UNITS",
+        "MANAGE_TERRITORY",
+      ],
+    },
+    update: {},
+  });
+
+  await db.orgUnitAssignment.upsert({
+    where: {
+      orgUnitId_userId: { orgUnitId: southwestRegion.id, userId: regionalManager.id },
+    },
+    create: {
+      orgUnitId: southwestRegion.id,
+      userId: regionalManager.id,
+      permissions: [
+        "VIEW_METRICS",
+        "MANAGE_REQUESTS",
+        "VIEW_CALENDAR",
+        "VIEW_TEAM_CALENDAR",
+        "MANAGE_REPS",
+      ],
+    },
+    update: {},
+  });
+
+  await db.user.update({
+    where: { id: medtronicAdmin!.id },
+    data: { orgUnitId: medtronicCompanyUnit.id },
+  });
+
+  await db.user.update({
+    where: { id: repMike.id },
+    data: { managerId: regionalManager.id, orgUnitId: phoenixTerritory.id },
+  });
+  await db.user.update({
+    where: { id: repLisa.id },
+    data: { managerId: regionalManager.id, orgUnitId: phoenixTerritory.id },
+  });
+
   await db.serviceRequest.updateMany({
     where: {
       companyId: medtronic.id,
@@ -683,6 +851,45 @@ async function main() {
       companyId: boston.id,
     },
   });
+
+  const bostonAdmin = await db.user.findUnique({
+    where: { email: "admin2@demo.com" },
+    select: { id: true },
+  });
+  const bostonCompanyUnit = await upsertOrgUnit({
+    companyId: boston.id,
+    name: "Boston Scientific",
+    typeLabel: "Company",
+  });
+  if (bostonAdmin) {
+    await db.user.update({
+      where: { id: bostonAdmin.id },
+      data: { orgUnitId: bostonCompanyUnit.id },
+    });
+    await db.orgUnitAssignment.upsert({
+      where: {
+        orgUnitId_userId: { orgUnitId: bostonCompanyUnit.id, userId: bostonAdmin.id },
+      },
+      create: {
+        orgUnitId: bostonCompanyUnit.id,
+        userId: bostonAdmin.id,
+        permissions: [
+          "VIEW_METRICS",
+          "MANAGE_REQUESTS",
+          "VIEW_CALENDAR",
+          "VIEW_TEAM_CALENDAR",
+          "MANAGE_REPS",
+          "MANAGE_TEAMS",
+          "MANAGE_ORG_UNITS",
+        ],
+      },
+      update: {},
+    });
+    await db.user.update({
+      where: { id: repTom.id },
+      data: { managerId: bostonAdmin.id, orgUnitId: bostonCompanyUnit.id },
+    });
+  }
 
   await db.user.upsert({
     where: { email: "super@demo.com" },
@@ -1042,7 +1249,8 @@ ACCOUNTS
   Rep (Medtronic)     rep@demo.com          → /rep   Mike Rodriguez, AVAILABLE
   Rep (Medtronic)     rep2@demo.com         → /rep   Lisa Wong, BUSY
   Rep (Boston Sci)    rep3@demo.com         → /rep   Tom Hayes, AVAILABLE
-  Company admin       admin@demo.com        → /company   (Medtronic)
+  Company admin       admin@demo.com        → /company   (Medtronic, company-wide)
+  Regional admin      manager@demo.com      → /company   (Southwest region)
   Company admin       admin2@demo.com       → /company   (Boston Scientific)
   Platform admin      super@demo.com        → /admin
 
