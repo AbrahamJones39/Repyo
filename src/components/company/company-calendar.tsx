@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { fetchJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -13,6 +14,7 @@ import {
   isSameDay,
   isSameMonth,
   startOfMonth,
+  subDays,
   subMonths,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -23,6 +25,11 @@ import {
   type CalendarBlockPreview,
   type CalendarRequestPreview,
 } from "@/components/shared/calendar-event-modal";
+import {
+  CalendarDayView,
+  CalendarViewToggle,
+  type CalendarViewMode,
+} from "@/components/shared/calendar-day-view";
 
 interface CalendarRequest {
   id: string;
@@ -51,6 +58,7 @@ const REP_COLORS = [
 
 export function CompanyCalendarPage({ userName }: { userName: string }) {
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [reps, setReps] = useState<RepCalendarData[]>([]);
   const [selectedRepId, setSelectedRepId] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -114,14 +122,32 @@ export function CompanyCalendarPage({ userName }: { userName: string }) {
             View schedules, time off, and assigned cases across your team
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setViewDate(subMonths(viewDate, 1))}>
+        <div className="flex flex-wrap items-center gap-2">
+          <CalendarViewToggle view={viewMode} onChange={setViewMode} />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setViewDate(viewMode === "day" ? subDays(viewDate, 1) : subMonths(viewDate, 1))
+            }
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[140px] text-center font-medium text-slate-900">
-            {format(viewDate, "MMMM yyyy")}
+          <span className="min-w-[180px] text-center font-medium text-slate-900">
+            {viewMode === "day"
+              ? format(viewDate, "EEEE, MMM d, yyyy")
+              : format(viewDate, "MMMM yyyy")}
           </span>
-          <Button variant="secondary" size="sm" onClick={() => setViewDate(addMonths(viewDate, 1))}>
+          <Button variant="secondary" size="sm" onClick={() => setViewDate(new Date())}>
+            Today
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setViewDate(viewMode === "day" ? addDays(viewDate, 1) : addMonths(viewDate, 1))
+            }
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -162,130 +188,193 @@ export function CompanyCalendarPage({ userName }: { userName: string }) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d}>{d}</div>
-          ))}
-        </div>
-
-        {loading ? (
-          <p className="py-12 text-center text-slate-500">Loading calendar...</p>
-        ) : (
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: padding }).map((_, i) => (
-              <div key={`pad-${i}`} className="min-h-[100px] rounded-lg bg-slate-50/50" />
-            ))}
-            {days.map((day) => {
-              const dayRequests = allRequests.filter((r) =>
-                isSameDay(new Date(r.scheduledAt), day)
-              );
-              const dayBlocks = reps.flatMap((rep) =>
+        {viewMode === "day" ? (
+          <CalendarDayView
+            date={viewDate}
+            loading={loading}
+            events={[
+              ...reps.flatMap((rep) =>
                 rep.blocks
                   .filter(
                     (b) =>
-                      new Date(b.startAt) <= day &&
-                      new Date(b.endAt) >= day
+                      new Date(b.startAt) <= viewDate && new Date(b.endAt) >= viewDate
                   )
-                  .map((b) => ({ ...b, repName: rep.name, repId: rep.id }))
-              );
+                  .map((block) => ({
+                    id: block.id,
+                    title: `${rep.name.split(" ")[0]} · ${block.type === "VACATION" ? "Vacation" : "Off"}`,
+                    startAt: block.startAt,
+                    endAt: block.endAt,
+                    allDay: true,
+                    className: "border-transparent bg-slate-100 text-slate-600",
+                    onClick: () =>
+                      setSelectedBlock({
+                        id: block.id,
+                        type: block.type as "VACATION" | "OFF",
+                        startAt: block.startAt,
+                        endAt: block.endAt,
+                        note: block.note,
+                        repName: rep.name,
+                      }),
+                  }))
+              ),
+              ...allRequests
+                .filter((r) => isSameDay(new Date(r.scheduledAt), viewDate))
+                .map((req) => ({
+                  id: req.id,
+                  title: req.facilityName,
+                  subtitle: req.repName,
+                  startAt: req.scheduledAt,
+                  className:
+                    colorByRep.get(req.repId) ??
+                    "border-slate-200 bg-slate-100 text-slate-700",
+                  onClick: () =>
+                    setSelectedRequest({
+                      id: req.id,
+                      facilityName: req.facilityName,
+                      procedureType: req.procedureType,
+                      scheduledAt: req.scheduledAt,
+                      status: req.status,
+                      urgency: req.urgency,
+                      repName: req.repName,
+                    }),
+                })),
+            ]}
+          />
+        ) : (
+          <>
+            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <div key={d}>{d}</div>
+              ))}
+            </div>
 
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    "min-h-[100px] rounded-lg border p-1.5",
-                    isSameMonth(day, viewDate)
-                      ? "border-slate-100 bg-white"
-                      : "border-transparent bg-slate-50 text-slate-400"
-                  )}
-                >
-                  <div className="mb-1 text-xs font-medium text-slate-700">
-                    {format(day, "d")}
-                  </div>
-                  <div className="space-y-1">
-                    {dayBlocks.slice(0, 2).map((block) => (
+            {loading ? (
+              <p className="py-12 text-center text-slate-500">Loading calendar...</p>
+            ) : (
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: padding }).map((_, i) => (
+                  <div key={`pad-${i}`} className="min-h-[100px] rounded-lg bg-slate-50/50" />
+                ))}
+                {days.map((day) => {
+                  const dayRequests = allRequests.filter((r) =>
+                    isSameDay(new Date(r.scheduledAt), day)
+                  );
+                  const dayBlocks = reps.flatMap((rep) =>
+                    rep.blocks
+                      .filter(
+                        (b) =>
+                          new Date(b.startAt) <= day &&
+                          new Date(b.endAt) >= day
+                      )
+                      .map((b) => ({ ...b, repName: rep.name, repId: rep.id }))
+                  );
+
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className={cn(
+                        "min-h-[100px] rounded-lg border p-1.5",
+                        isSameMonth(day, viewDate)
+                          ? "border-slate-100 bg-white"
+                          : "border-transparent bg-slate-50 text-slate-400"
+                      )}
+                    >
                       <button
-                        key={block.id}
                         type="button"
-                        onClick={() =>
-                          setSelectedBlock({
-                            id: block.id,
-                            type: block.type as "VACATION" | "OFF",
-                            startAt: block.startAt,
-                            endAt: block.endAt,
-                            note: block.note,
-                            repName: block.repName,
-                          })
-                        }
-                        className={cn(
-                          calendarEventChipClass,
-                          "block w-full border-transparent bg-slate-100 text-left text-slate-600"
+                        onClick={() => {
+                          setViewDate(day);
+                          setViewMode("day");
+                        }}
+                        className="mb-1 text-xs font-medium text-slate-700 hover:text-rose-700 hover:underline"
+                      >
+                        {format(day, "d")}
+                      </button>
+                      <div className="space-y-1">
+                        {dayBlocks.slice(0, 2).map((block) => (
+                          <button
+                            key={block.id}
+                            type="button"
+                            onClick={() =>
+                              setSelectedBlock({
+                                id: block.id,
+                                type: block.type as "VACATION" | "OFF",
+                                startAt: block.startAt,
+                                endAt: block.endAt,
+                                note: block.note,
+                                repName: block.repName,
+                              })
+                            }
+                            className={cn(
+                              calendarEventChipClass,
+                              "block w-full border-transparent bg-slate-100 text-left text-slate-600"
+                            )}
+                            title={`${block.repName}: ${block.type}`}
+                          >
+                            {block.repName.split(" ")[0]} · {block.type === "VACATION" ? "Vacation" : "Off"}
+                          </button>
+                        ))}
+                        {dayRequests.slice(0, 3).map((req) => (
+                          <button
+                            key={req.id}
+                            type="button"
+                            onClick={() =>
+                              setSelectedRequest({
+                                id: req.id,
+                                facilityName: req.facilityName,
+                                procedureType: req.procedureType,
+                                scheduledAt: req.scheduledAt,
+                                status: req.status,
+                                urgency: req.urgency,
+                                repName: req.repName,
+                              })
+                            }
+                            className={cn(
+                              calendarEventChipClass,
+                              "block w-full text-left",
+                              colorByRep.get(req.repId)
+                            )}
+                            title={`${req.repName} — ${req.facilityName}`}
+                          >
+                            {format(new Date(req.scheduledAt), "h:mm a")} {req.facilityName}
+                          </button>
+                        ))}
+                        {(dayRequests.length > 3 || dayBlocks.length > 2) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOverflowDay({
+                                date: day,
+                                requests: dayRequests.map((req) => ({
+                                  id: req.id,
+                                  facilityName: req.facilityName,
+                                  procedureType: req.procedureType,
+                                  scheduledAt: req.scheduledAt,
+                                  status: req.status,
+                                  urgency: req.urgency,
+                                  repName: req.repName,
+                                })),
+                                blocks: dayBlocks.map((block) => ({
+                                  id: block.id,
+                                  type: block.type as "VACATION" | "OFF",
+                                  startAt: block.startAt,
+                                  endAt: block.endAt,
+                                  note: block.note,
+                                  repName: block.repName,
+                                })),
+                              })
+                            }
+                            className="text-[10px] text-slate-500 hover:text-slate-800 hover:underline"
+                          >
+                            +{Math.max(0, dayRequests.length - 3) + Math.max(0, dayBlocks.length - 2)} more
+                          </button>
                         )}
-                        title={`${block.repName}: ${block.type}`}
-                      >
-                        {block.repName.split(" ")[0]} · {block.type === "VACATION" ? "Vacation" : "Off"}
-                      </button>
-                    ))}
-                    {dayRequests.slice(0, 3).map((req) => (
-                      <button
-                        key={req.id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedRequest({
-                            id: req.id,
-                            facilityName: req.facilityName,
-                            procedureType: req.procedureType,
-                            scheduledAt: req.scheduledAt,
-                            status: req.status,
-                            urgency: req.urgency,
-                            repName: req.repName,
-                          })
-                        }
-                        className={cn(
-                          calendarEventChipClass,
-                          "block w-full text-left",
-                          colorByRep.get(req.repId)
-                        )}
-                        title={`${req.repName} — ${req.facilityName}`}
-                      >
-                        {format(new Date(req.scheduledAt), "h:mm a")} {req.facilityName}
-                      </button>
-                    ))}
-                    {(dayRequests.length > 3 || dayBlocks.length > 2) && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOverflowDay({
-                            date: day,
-                            requests: dayRequests.map((req) => ({
-                              id: req.id,
-                              facilityName: req.facilityName,
-                              procedureType: req.procedureType,
-                              scheduledAt: req.scheduledAt,
-                              status: req.status,
-                              urgency: req.urgency,
-                              repName: req.repName,
-                            })),
-                            blocks: dayBlocks.map((block) => ({
-                              id: block.id,
-                              type: block.type as "VACATION" | "OFF",
-                              startAt: block.startAt,
-                              endAt: block.endAt,
-                              note: block.note,
-                              repName: block.repName,
-                            })),
-                          })
-                        }
-                        className="text-[10px] text-slate-500 hover:text-slate-800 hover:underline"
-                      >
-                        +{Math.max(0, dayRequests.length - 3) + Math.max(0, dayBlocks.length - 2)} more
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 
