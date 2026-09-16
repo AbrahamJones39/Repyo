@@ -20,9 +20,27 @@ export const ADMIN_PERMISSIONS = {
   VIEW_CALENDAR: "VIEW_CALENDAR",
   MANAGE_TEAMS: "MANAGE_TEAMS",
   VIEW_TEAM_CALENDAR: "VIEW_TEAM_CALENDAR",
+  VIEW_METRICS: "VIEW_METRICS",
   MANAGE_INTEGRATIONS: "MANAGE_INTEGRATIONS",
   MANAGE_TERRITORY: "MANAGE_TERRITORY",
 } as const;
+
+/** Suggested org-unit type labels — never enforced as an enum. */
+export const ORG_UNIT_TYPE_SUGGESTIONS = [
+  "Company",
+  "Division",
+  "Region",
+  "Area",
+  "Territory",
+  "Team",
+] as const;
+
+export const DEFAULT_ADMIN_SCOPE_PERMISSIONS = [
+  ADMIN_PERMISSIONS.VIEW_METRICS,
+  ADMIN_PERMISSIONS.VIEW_CALENDAR,
+  ADMIN_PERMISSIONS.VIEW_TEAM_CALENDAR,
+  ADMIN_PERMISSIONS.MANAGE_REQUESTS,
+] as const;
 
 export const SECURITY_PERMISSIONS = {
   SECURITY_KILL_SWITCH: "SECURITY_KILL_SWITCH",
@@ -147,6 +165,7 @@ export function canAccessRequestRecord(
     assignedAdminId: string | null;
     initiatedByRepId: string | null;
     companyId: string;
+    escalatedToId?: string | null;
   },
   options?: { delegatedAdminIds?: string[] }
 ): boolean {
@@ -165,7 +184,11 @@ export function canAccessRequestRecord(
   if (user.role === "COMPANY_ADMIN") {
     if (user.companyId !== request.companyId) return false;
     if (request.assignedAdminId === user.id) return true;
-    return hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REQUESTS);
+    if (request.escalatedToId === user.id) return true;
+    return (
+      hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REQUESTS) ||
+      hasAdminPermission(user, ADMIN_PERMISSIONS.VIEW_METRICS)
+    );
   }
   return false;
 }
