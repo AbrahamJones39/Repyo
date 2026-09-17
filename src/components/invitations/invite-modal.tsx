@@ -47,11 +47,7 @@ export function InviteModal({
       expiresAt: string;
     }[]
   >([]);
-  const [orgUnits, setOrgUnits] = useState<
-    { id: string; name: string; typeLabel: string; depth: number }[]
-  >([]);
   const [people, setPeople] = useState<{ id: string; name: string; role: string }[]>([]);
-  const [orgUnitId, setOrgUnitId] = useState("");
   const [managerId, setManagerId] = useState("");
 
   const loadRecent = useCallback(async () => {
@@ -77,9 +73,7 @@ export function InviteModal({
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (!data) return;
-          setOrgUnits(data.flat ?? []);
           setPeople(data.people ?? []);
-          if (data.flat?.[0]?.id) setOrgUnitId(data.flat[0].id);
         })
         .catch(() => undefined);
     }
@@ -99,7 +93,6 @@ export function InviteModal({
           channel,
           inviteeEmail: channel === "EMAIL" ? email : undefined,
           targetRole: targetRoleOptions ? targetRole : undefined,
-          orgUnitId: orgUnitId || undefined,
           managerId: managerId || undefined,
         }),
       });
@@ -212,27 +205,6 @@ export function InviteModal({
                 {people.map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.name} · {person.role === "REP" ? "Rep" : "Admin"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {targetRoleOptions && orgUnits.length > 0 && (
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">
-                {targetRole === "COMPANY_ADMIN" ? "Admin organizational unit" : "Home unit (optional)"}
-              </span>
-              <select
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={orgUnitId}
-                onChange={(e) => setOrgUnitId(e.target.value)}
-              >
-                {targetRole !== "COMPANY_ADMIN" && <option value="">None</option>}
-                {orgUnits.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {"— ".repeat(unit.depth)}
-                    {unit.name} ({unit.typeLabel})
                   </option>
                 ))}
               </select>

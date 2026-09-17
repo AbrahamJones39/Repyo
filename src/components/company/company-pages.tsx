@@ -396,22 +396,16 @@ function AddRepModal({
   const [error, setError] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [managers, setManagers] = useState<{ id: string; name: string; role: string }[]>([]);
-  const [units, setUnits] = useState<{ id: string; name: string; typeLabel: string; depth: number }[]>(
-    []
-  );
 
   useEffect(() => {
     fetchJson<{
       people: { id: string; name: string; role: string }[];
-      flat: { id: string; name: string; typeLabel: string; depth: number }[];
     }>("/api/company/org-units")
       .then((data) => {
         setManagers(data.people ?? []);
-        setUnits(data.flat ?? []);
       })
       .catch(() => {
         setManagers([]);
-        setUnits([]);
       });
   }, []);
 
@@ -438,7 +432,6 @@ function AddRepModal({
           password: form.get("password"),
           phone: form.get("phone") || undefined,
           managerId: form.get("managerId"),
-          orgUnitId: form.get("orgUnitId") || undefined,
           credentialStatus: form.get("credentialStatus"),
           status: form.get("status"),
           products: selectedProducts,
@@ -500,19 +493,6 @@ function AddRepModal({
           <p className="-mt-2 text-xs text-slate-500">
             Required. Missed requests escalate to this manager.
           </p>
-          {units.length > 0 && (
-            <Select
-              label="Organizational unit"
-              name="orgUnitId"
-              options={[
-                { value: "", label: "None" },
-                ...units.map((u) => ({
-                  value: u.id,
-                  label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
-                })),
-              ]}
-            />
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select

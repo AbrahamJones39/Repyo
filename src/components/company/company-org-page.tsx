@@ -11,14 +11,11 @@ import {
 } from "@/lib/security/authorization";
 import { cn } from "@/lib/utils";
 
-type OrgNode = {
+type FlatUnit = {
   id: string;
-  parentId: string | null;
   name: string;
   typeLabel: string;
-  children: OrgNode[];
-  members?: { id: string }[];
-  assignments?: { id: string }[];
+  depth: number;
 };
 
 type Person = {
@@ -27,30 +24,16 @@ type Person = {
   email: string;
   role: "REP" | "COMPANY_ADMIN";
   managerId: string | null;
-  orgUnitId: string | null;
   manager: { id: string; name: string; role: string } | null;
   homeOrgUnit: { id: string; name: string; typeLabel: string } | null;
 };
 
-type FlatUnit = {
-  id: string;
-  name: string;
-  typeLabel: string;
-  depth: number;
-  parentId?: string | null;
-};
-
 type OrgPayload = {
   companyName?: string;
-  tree: OrgNode[];
   flat: FlatUnit[];
   people: Person[];
-  canManageStructure: boolean;
   canAssignPeople: boolean;
-  scope: { isCompanyWide: boolean; permissions: string[] };
 };
-
-type TreeAction = "rename" | "move" | "delete";
 
 function roleFromPerson(
   person: Person | undefined,
@@ -74,7 +57,6 @@ const PERMISSION_OPTIONS = [
   { id: "VIEW_TEAM_CALENDAR", label: "View team calendars" },
   { id: "MANAGE_REPS", label: "Manage reps" },
   { id: "MANAGE_TEAMS", label: "Manage teams" },
-  { id: "MANAGE_ORG_UNITS", label: "Edit org structure" },
   { id: "MANAGE_TERRITORY", label: "Manage territory" },
 ];
 
@@ -88,10 +70,6 @@ export function CompanyOrgPage({
   const [data, setData] = useState<OrgPayload | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [parentId, setParentId] = useState("");
-  const [unitName, setUnitName] = useState("");
-  const [typeLabel, setTypeLabel] = useState<string>(ORG_UNIT_TYPE_SUGGESTIONS[0]);
-  const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
   const [assignRole, setAssignRole] = useState("");
   const [customAssignRole, setCustomAssignRole] = useState("");
@@ -102,66 +80,24 @@ export function CompanyOrgPage({
     "VIEW_CALENDAR",
     "VIEW_TEAM_CALENDAR",
   ]);
-  const [activeUnitId, setActiveUnitId] = useState<string | null>(null);
-  const [activeAction, setActiveAction] = useState<TreeAction | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editParentId, setEditParentId] = useState("");
-  const [savingUnit, setSavingUnit] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     try {
       const payload = await fetchJson<OrgPayload>("/api/company/org-units");
       setData(payload);
-      if (
-        payload.flat[0] &&
-        (!parentId || !payload.flat.some((unit) => unit.id === parentId))
-      ) {
-        setParentId(payload.flat[0].id);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load organization");
     }
-  }, [parentId]);
+  }, []);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
 
-  const isCustomType = typeLabel === CUSTOM_ORG_UNIT_TYPE_VALUE;
-  const resolvedTypeLabel = isCustomType ? customTypeLabel.trim() : typeLabel;
   const isCustomAssignRole = assignRole === CUSTOM_ORG_UNIT_TYPE_VALUE;
   const resolvedAssignRole = isCustomAssignRole ? customAssignRole.trim() : assignRole;
   const displayedCompany = companyName || data?.companyName || "";
-
-  async function addUnit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    if (!resolvedTypeLabel) {
-      setError("Enter a name for the new unit type");
-      return;
-    }
-    try {
-      await fetchJson("/api/company/org-units", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: unitName,
-          typeLabel: resolvedTypeLabel,
-          parentId: parentId || null,
-        }),
-      });
-      setUnitName("");
-      setCustomTypeLabel("");
-      setTypeLabel(ORG_UNIT_TYPE_SUGGESTIONS[0]);
-      setMessage("Organizational unit added");
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add unit");
-    }
-  }
 
   async function assignMember(e: React.FormEvent) {
     e.preventDefault();
@@ -173,7 +109,7 @@ export function CompanyOrgPage({
     }
     const rootId = data?.flat.find((u) => u.depth === 0)?.id ?? data?.flat[0]?.id;
     if (!rootId) {
-      setError("Create an organizational unit first");
+      setError("Organization is not ready yet. Try again in a moment.");
       return;
     }
     setError("");
@@ -196,114 +132,15 @@ export function CompanyOrgPage({
     }
   }
 
-  function clearUnitAction() {
-    setActiveUnitId(null);
-    setActiveAction(null);
-    setEditName("");
-    setEditParentId("");
-  }
-
-  function startRename(node: OrgNode) {
-    setError("");
-    setMessage("");
-    setActiveUnitId(node.id);
-    setActiveAction("rename");
-    setEditName(node.name);
-    setEditParentId("");
-  }
-
-  function startMove(node: OrgNode) {
-    setError("");
-    setMessage("");
-    setActiveUnitId(node.id);
-    setActiveAction("move");
-    setEditName("");
-    setEditParentId(node.parentId ?? "");
-  }
-
-  function startDelete(node: OrgNode) {
-    setError("");
-    setMessage("");
-    setActiveUnitId(node.id);
-    setActiveAction("delete");
-    setEditName("");
-    setEditParentId("");
-  }
-
-  async function saveRename(unitId: string) {
-    const name = editName.trim();
-    if (!name) {
-      setError("Enter a name");
-      return;
-    }
-    setError("");
-    setMessage("");
-    setSavingUnit(true);
-    try {
-      await fetchJson(`/api/company/org-units/${unitId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      setMessage("Unit renamed");
-      clearUnitAction();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to rename unit");
-    } finally {
-      setSavingUnit(false);
-    }
-  }
-
-  async function saveMove(unitId: string) {
-    if (!editParentId) {
-      setError("Choose a parent unit");
-      return;
-    }
-    setError("");
-    setMessage("");
-    setSavingUnit(true);
-    try {
-      await fetchJson(`/api/company/org-units/${unitId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId: editParentId }),
-      });
-      setMessage("Unit moved");
-      clearUnitAction();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to move unit");
-    } finally {
-      setSavingUnit(false);
-    }
-  }
-
-  async function confirmDelete(unitId: string) {
-    setError("");
-    setMessage("");
-    setSavingUnit(true);
-    try {
-      await fetchJson(`/api/company/org-units/${unitId}`, { method: "DELETE" });
-      setMessage("Unit deleted");
-      clearUnitAction();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete unit");
-    } finally {
-      setSavingUnit(false);
-    }
-  }
-
   const selectedPerson = data?.people.find((p) => p.id === assignUserId);
   const extraRoleLabels = data
     ? [
         ...new Set(
-          data.flat
-            .map((u) => u.typeLabel)
+          data.people
+            .map((p) => p.homeOrgUnit?.typeLabel)
             .filter(
-              (label) =>
-                label &&
+              (label): label is string =>
+                Boolean(label) &&
                 !(ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label)
             )
         ),
@@ -318,9 +155,8 @@ export function CompanyOrgPage({
           <p className="mt-1 text-sm font-semibold text-slate-800">{displayedCompany}</p>
         )}
         <p className="mt-1 text-sm text-slate-600">
-          Admins are assigned to a unit and can see that unit plus every unit below it.
-          Choose a hierarchy unit (rep, team lead, sales manager, and so on) or create a new
-          unit type. This is operational access only — it does not grant patient information.
+          Assign each person a role and a designated manager. This is operational access
+          only — it does not grant patient information.
         </p>
       </div>
 
@@ -334,551 +170,162 @@ export function CompanyOrgPage({
       )}
 
       {!data ? (
-        <p className="text-slate-500">Loading organization...</p>
+        error ? null : <p className="text-slate-500">Loading organization...</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-5">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-3">
-            <h2 className="font-semibold text-slate-900">Hierarchy</h2>
-            <div className="mt-4 space-y-1">
-              {data.tree.length === 0 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Your company does not have a hierarchy yet. Pick a unit type below to
-                    create the first one.
-                  </p>
-                  {data.canManageStructure && (
-                    <div className="flex flex-wrap gap-2">
-                      {ORG_UNIT_TYPE_SUGGESTIONS.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setTypeLabel(t)}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-medium",
-                            typeLabel === t
-                              ? "border-rose-300 bg-rose-50 text-rose-700"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                          )}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setTypeLabel(CUSTOM_ORG_UNIT_TYPE_VALUE)}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium",
-                          isCustomType
-                            ? "border-rose-300 bg-rose-50 text-rose-700"
-                            : "border-dashed border-slate-300 bg-white text-slate-600 hover:border-slate-400"
-                        )}
-                      >
-                        Create a new unit
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                data.tree.map((node) => (
-                  <OrgTreeNode
-                    key={node.id}
-                    node={node}
-                    flat={data.flat}
-                    people={data.people}
-                    canManage={data.canManageStructure}
-                    activeUnitId={activeUnitId}
-                    activeAction={activeAction}
-                    editName={editName}
-                    editParentId={editParentId}
-                    saving={savingUnit}
-                    onEditName={setEditName}
-                    onEditParent={setEditParentId}
-                    onStartRename={startRename}
-                    onStartMove={startMove}
-                    onStartDelete={startDelete}
-                    onCancel={clearUnitAction}
-                    onSaveRename={saveRename}
-                    onSaveMove={saveMove}
-                    onConfirmDelete={confirmDelete}
-                  />
-                ))
-              )}
+          <section className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-3">
+            <h2 className="font-semibold text-slate-900">People</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Every rep has a designated manager. Missed requests escalate to that manager.
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-xs uppercase text-slate-500">
+                    <th className="px-2 py-2">Person</th>
+                    <th className="px-2 py-2">Role</th>
+                    <th className="px-2 py-2">Manager</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.people.map((person) => (
+                    <tr key={person.id} className="border-b border-slate-50 last:border-0">
+                      <td className="px-2 py-2">
+                        <p className="font-medium text-slate-900">{person.name}</p>
+                        <p className="text-xs text-slate-500">{person.email}</p>
+                      </td>
+                      <td className="px-2 py-2 text-slate-600">
+                        {person.homeOrgUnit?.typeLabel ??
+                          (person.role === "REP" ? "Rep" : "Admin")}
+                      </td>
+                      <td className="px-2 py-2 text-slate-600">
+                        {person.manager?.name ?? (person.role === "REP" ? "Missing" : "—")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </section>
 
-          <div className="space-y-6 lg:col-span-2">
-            {(data.canManageStructure || data.tree.length === 0) && (
-              <form
-                onSubmit={addUnit}
-                className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
-              >
-                <h2 className="font-semibold text-slate-900">Add unit</h2>
-                <div>
-                  <p className="mb-2 text-sm font-medium text-slate-700">Hierarchy unit</p>
-                  <div className="flex flex-wrap gap-2">
-                    {ORG_UNIT_TYPE_SUGGESTIONS.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTypeLabel(t)}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium",
-                          typeLabel === t
-                            ? "border-rose-300 bg-rose-50 text-rose-700"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setTypeLabel(CUSTOM_ORG_UNIT_TYPE_VALUE)}
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium",
-                        isCustomType
-                          ? "border-rose-300 bg-rose-50 text-rose-700"
-                          : "border-dashed border-slate-300 bg-white text-slate-600 hover:border-slate-400"
-                      )}
-                    >
-                      Create a new unit
-                    </button>
-                  </div>
-                </div>
-                {isCustomType && (
-                  <Input
-                    label="New unit type"
-                    value={customTypeLabel}
-                    onChange={(e) => setCustomTypeLabel(e.target.value)}
-                    placeholder="e.g. Regional Director"
-                    required
-                  />
-                )}
-                <Input
-                  label="Name"
-                  value={unitName}
-                  onChange={(e) => setUnitName(e.target.value)}
-                  placeholder={
-                    isCustomType
-                      ? "e.g. West Coast Regional Director"
-                      : `e.g. Phoenix ${typeLabel}`
+          {data.canAssignPeople && (
+            <form
+              onSubmit={assignMember}
+              className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2"
+            >
+              <h2 className="font-semibold text-slate-900">Assign person</h2>
+              <Select
+                label="Person"
+                value={assignUserId}
+                onChange={(e) => {
+                  setAssignUserId(e.target.value);
+                  const person = data.people.find((p) => p.id === e.target.value);
+                  setAssignManagerId(person?.managerId ?? "");
+                  const nextRole = roleFromPerson(person, extraRoleLabels);
+                  setAssignRole(nextRole.role);
+                  setCustomAssignRole(nextRole.custom);
+                }}
+                options={[
+                  { value: "", label: "Select..." },
+                  ...data.people.map((p) => ({
+                    value: p.id,
+                    label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
+                  })),
+                ]}
+              />
+              <Select
+                label="Organization role"
+                value={assignRole}
+                onChange={(e) => {
+                  setAssignRole(e.target.value);
+                  if (e.target.value !== CUSTOM_ORG_UNIT_TYPE_VALUE) {
+                    setCustomAssignRole("");
                   }
+                }}
+                options={[
+                  { value: "", label: "Select..." },
+                  ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({
+                    value: t,
+                    label: t,
+                  })),
+                  ...extraRoleLabels.map((t) => ({
+                    value: t,
+                    label: t,
+                  })),
+                  { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new role" },
+                ]}
+              />
+              {isCustomAssignRole && (
+                <Input
+                  label="New organization role"
+                  value={customAssignRole}
+                  onChange={(e) => setCustomAssignRole(e.target.value)}
+                  placeholder="e.g. Regional Director"
                   required
                 />
+              )}
+              {selectedPerson && (
                 <Select
-                  label="Parent unit"
-                  value={parentId}
-                  onChange={(e) => setParentId(e.target.value)}
-                  options={
-                    data.flat.length > 0
-                      ? data.flat.map((u) => ({
-                          value: u.id,
-                          label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
-                        }))
-                      : [{ value: "", label: "No parent yet — this will be the first unit" }]
-                  }
-                />
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={!unitName.trim() || !resolvedTypeLabel}
-                >
-                  Add unit
-                </Button>
-              </form>
-            )}
-
-            {data.canAssignPeople && (
-              <form
-                onSubmit={assignMember}
-                className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
-              >
-                <h2 className="font-semibold text-slate-900">Assign person</h2>
-                <Select
-                  label="Person"
-                  value={assignUserId}
-                  onChange={(e) => {
-                    setAssignUserId(e.target.value);
-                    const person = data.people.find((p) => p.id === e.target.value);
-                    setAssignManagerId(person?.managerId ?? "");
-                    const nextRole = roleFromPerson(person, extraRoleLabels);
-                    setAssignRole(nextRole.role);
-                    setCustomAssignRole(nextRole.custom);
-                  }}
+                  label="Designated manager"
+                  value={assignManagerId}
+                  onChange={(e) => setAssignManagerId(e.target.value)}
                   options={[
-                    { value: "", label: "Select..." },
-                    ...data.people.map((p) => ({
-                      value: p.id,
-                      label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
-                    })),
+                    { value: "", label: "Select manager..." },
+                    ...data.people
+                      .filter((p) => p.id !== assignUserId)
+                      .map((p) => ({
+                        value: p.id,
+                        label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
+                      })),
                   ]}
                 />
-                <Select
-                  label="Organization role"
-                  value={assignRole}
-                  onChange={(e) => {
-                    setAssignRole(e.target.value);
-                    if (e.target.value !== CUSTOM_ORG_UNIT_TYPE_VALUE) {
-                      setCustomAssignRole("");
-                    }
-                  }}
-                  options={[
-                    { value: "", label: "Select..." },
-                    ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({
-                      value: t,
-                      label: t,
-                    })),
-                    ...extraRoleLabels.map((t) => ({
-                      value: t,
-                      label: t,
-                    })),
-                    { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new role" },
-                  ]}
-                />
-                {isCustomAssignRole && (
-                  <Input
-                    label="New organization role"
-                    value={customAssignRole}
-                    onChange={(e) => setCustomAssignRole(e.target.value)}
-                    placeholder="e.g. Regional Director"
-                    required
-                  />
-                )}
-                {selectedPerson && (
-                  <Select
-                    label="Designated manager"
-                    value={assignManagerId}
-                    onChange={(e) => setAssignManagerId(e.target.value)}
-                    options={[
-                      { value: "", label: "Select manager..." },
-                      ...data.people
-                        .filter((p) => p.id !== assignUserId)
-                        .map((p) => ({
-                          value: p.id,
-                          label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
-                        })),
-                    ]}
-                  />
-                )}
-                {selectedPerson?.role === "COMPANY_ADMIN" && (
-                  <div>
-                    <p className="mb-2 text-sm font-medium text-slate-700">
-                      Permissions for this unit and below
-                    </p>
-                    <p className="mb-2 text-xs text-slate-500">
-                      Never includes patient information.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {PERMISSION_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() =>
-                            setPermissions((prev) =>
-                              prev.includes(opt.id)
-                                ? prev.filter((p) => p !== opt.id)
-                                : [...prev, opt.id]
-                            )
-                          }
-                          className={cn(
-                            "rounded-full border px-3 py-1 text-xs font-medium",
-                            permissions.includes(opt.id)
-                              ? "border-rose-300 bg-rose-50 text-rose-700"
-                              : "border-slate-200 bg-white text-slate-600"
-                          )}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
+              )}
+              {selectedPerson?.role === "COMPANY_ADMIN" && (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-700">Permissions</p>
+                  <p className="mb-2 text-xs text-slate-500">
+                    Never includes patient information.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {PERMISSION_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() =>
+                          setPermissions((prev) =>
+                            prev.includes(opt.id)
+                              ? prev.filter((p) => p !== opt.id)
+                              : [...prev, opt.id]
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-medium",
+                          permissions.includes(opt.id)
+                            ? "border-rose-300 bg-rose-50 text-rose-700"
+                            : "border-slate-200 bg-white text-slate-600"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={
-                    !assignUserId ||
-                    !resolvedAssignRole ||
-                    (selectedPerson?.role === "REP" && !assignManagerId)
-                  }
-                >
-                  Save assignment
-                </Button>
-              </form>
-            )}
-          </div>
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  !assignUserId ||
+                  !resolvedAssignRole ||
+                  (selectedPerson?.role === "REP" && !assignManagerId)
+                }
+              >
+                Save assignment
+              </Button>
+            </form>
+          )}
         </div>
-      )}
-
-      {data && (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="font-semibold text-slate-900">Reporting ladder</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Every rep has a designated manager. Missed requests escalate up this ladder.
-          </p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase text-slate-500">
-                  <th className="px-2 py-2">Person</th>
-                  <th className="px-2 py-2">Role</th>
-                  <th className="px-2 py-2">Unit</th>
-                  <th className="px-2 py-2">Manager</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.people.map((person) => (
-                  <tr key={person.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-2 py-2">
-                      <p className="font-medium text-slate-900">{person.name}</p>
-                      <p className="text-xs text-slate-500">{person.email}</p>
-                    </td>
-                    <td className="px-2 py-2 text-slate-600">
-                      {person.homeOrgUnit?.typeLabel ??
-                        (person.role === "REP" ? "Rep" : "Admin")}
-                    </td>
-                    <td className="px-2 py-2 text-slate-600">
-                      {person.homeOrgUnit
-                        ? `${person.homeOrgUnit.name} (${person.homeOrgUnit.typeLabel})`
-                        : "—"}
-                    </td>
-                    <td className="px-2 py-2 text-slate-600">
-                      {person.manager?.name ?? (person.role === "REP" ? "Missing" : "—")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
       )}
     </PortalShell>
-  );
-}
-
-function collectDescendantIds(node: OrgNode): string[] {
-  return [node.id, ...node.children.flatMap(collectDescendantIds)];
-}
-
-function unitHasPeople(node: OrgNode, people: Person[]) {
-  return (
-    (node.members?.length ?? 0) > 0 ||
-    (node.assignments?.length ?? 0) > 0 ||
-    people.some((person) => person.orgUnitId === node.id)
-  );
-}
-
-function OrgTreeNode({
-  node,
-  depth = 0,
-  flat,
-  people,
-  canManage,
-  activeUnitId,
-  activeAction,
-  editName,
-  editParentId,
-  saving,
-  onEditName,
-  onEditParent,
-  onStartRename,
-  onStartMove,
-  onStartDelete,
-  onCancel,
-  onSaveRename,
-  onSaveMove,
-  onConfirmDelete,
-}: {
-  node: OrgNode;
-  depth?: number;
-  flat: FlatUnit[];
-  people: Person[];
-  canManage: boolean;
-  activeUnitId: string | null;
-  activeAction: TreeAction | null;
-  editName: string;
-  editParentId: string;
-  saving: boolean;
-  onEditName: (value: string) => void;
-  onEditParent: (value: string) => void;
-  onStartRename: (node: OrgNode) => void;
-  onStartMove: (node: OrgNode) => void;
-  onStartDelete: (node: OrgNode) => void;
-  onCancel: () => void;
-  onSaveRename: (unitId: string) => void;
-  onSaveMove: (unitId: string) => void;
-  onConfirmDelete: (unitId: string) => void;
-}) {
-  const isRoot = !node.parentId;
-  const isActive = activeUnitId === node.id;
-  const blockedParentIds = new Set(collectDescendantIds(node));
-  const parentOptions = flat
-    .filter((unit) => !blockedParentIds.has(unit.id))
-    .map((unit) => ({
-      value: unit.id,
-      label: `${"— ".repeat(unit.depth)}${unit.name} (${unit.typeLabel})`,
-    }));
-  const parentName =
-    flat.find((unit) => unit.id === node.parentId)?.name ?? "the parent unit";
-  const hasPeople = unitHasPeople(node, people);
-
-  return (
-    <div>
-      <div
-        className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
-        style={{ paddingLeft: 8 + depth * 16 }}
-      >
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
-          {node.typeLabel}
-        </span>
-        <span className="font-medium text-slate-900">{node.name}</span>
-        {canManage && (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="text-xs font-medium text-rose-700 hover:underline"
-              onClick={() => onStartRename(node)}
-            >
-              Rename
-            </button>
-            {!isRoot && (
-              <button
-                type="button"
-                className="text-xs font-medium text-rose-700 hover:underline"
-                onClick={() => onStartMove(node)}
-                disabled={parentOptions.length === 0}
-              >
-                Move
-              </button>
-            )}
-            {!isRoot && (
-              <button
-                type="button"
-                className="text-xs font-medium text-red-600 hover:underline"
-                onClick={() => onStartDelete(node)}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {isActive && activeAction === "rename" && (
-        <form
-          className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
-          style={{ marginLeft: 8 + depth * 16 }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSaveRename(node.id);
-          }}
-        >
-          <Input
-            id={`rename-unit-${node.id}`}
-            label="Name"
-            value={editName}
-            onChange={(e) => onEditName(e.target.value)}
-            required
-          />
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={saving || !editName.trim()}>
-              Save
-            </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {isActive && activeAction === "move" && (
-        <form
-          className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
-          style={{ marginLeft: 8 + depth * 16 }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSaveMove(node.id);
-          }}
-        >
-          <Select
-            id={`move-unit-${node.id}`}
-            label="Parent unit"
-            value={editParentId}
-            onChange={(e) => onEditParent(e.target.value)}
-            options={
-              parentOptions.length > 0
-                ? parentOptions
-                : [{ value: "", label: "No eligible parent" }]
-            }
-          />
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={saving || !editParentId}>
-              Save
-            </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {isActive && activeAction === "delete" && (
-        <div
-          className="mb-2 space-y-2 rounded-lg border border-red-100 bg-red-50 p-3"
-          style={{ marginLeft: 8 + depth * 16 }}
-        >
-          {hasPeople ? (
-            <p className="text-sm text-red-700">
-              Reassign people on this unit before deleting it.
-            </p>
-          ) : (
-            <p className="text-sm text-red-700">
-              Delete {node.name}? Child units will move under {parentName}.
-            </p>
-          )}
-          <div className="flex gap-2">
-            {!hasPeople && (
-              <Button
-                type="button"
-                size="sm"
-                variant="danger"
-                disabled={saving}
-                onClick={() => onConfirmDelete(node.id)}
-              >
-                Delete
-              </Button>
-            )}
-            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {node.children.map((child) => (
-        <OrgTreeNode
-          key={child.id}
-          node={child}
-          depth={depth + 1}
-          flat={flat}
-          people={people}
-          canManage={canManage}
-          activeUnitId={activeUnitId}
-          activeAction={activeAction}
-          editName={editName}
-          editParentId={editParentId}
-          saving={saving}
-          onEditName={onEditName}
-          onEditParent={onEditParent}
-          onStartRename={onStartRename}
-          onStartMove={onStartMove}
-          onStartDelete={onStartDelete}
-          onCancel={onCancel}
-          onSaveRename={onSaveRename}
-          onSaveMove={onSaveMove}
-          onConfirmDelete={onConfirmDelete}
-        />
-      ))}
-    </div>
   );
 }
