@@ -246,6 +246,8 @@ export const updateOrgUnitSchema = z.object({
 export const orgUnitAssignmentSchema = z.object({
   userId: z.string().uuid(),
   permissions: z.array(z.string()).optional(),
+  typeLabel: z.string().min(1).max(60).optional(),
+  managerId: z.string().uuid().nullable().optional(),
 });
 
 export const updateMemberScopeSchema = z.object({

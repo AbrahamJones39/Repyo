@@ -98,25 +98,32 @@ export async function GET() {
     }
   }
 
-  const people = await db.user.findMany({
-    where: {
-      companyId: refreshedScope.companyId,
-      role: { in: ["COMPANY_ADMIN", "REP"] },
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      managerId: true,
-      orgUnitId: true,
-      manager: { select: { id: true, name: true, role: true } },
-      homeOrgUnit: { select: { id: true, name: true, typeLabel: true } },
-    },
-    orderBy: { name: "asc" },
-  });
+  const [people, company] = await Promise.all([
+    db.user.findMany({
+      where: {
+        companyId: refreshedScope.companyId,
+        role: { in: ["COMPANY_ADMIN", "REP"] },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        managerId: true,
+        orgUnitId: true,
+        manager: { select: { id: true, name: true, role: true } },
+        homeOrgUnit: { select: { id: true, name: true, typeLabel: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    db.company.findUnique({
+      where: { id: refreshedScope.companyId },
+      select: { name: true },
+    }),
+  ]);
 
   return NextResponse.json({
+    companyName: company?.name ?? "",
     tree,
     flat: flattenOrgUnits(tree),
     units: visible,

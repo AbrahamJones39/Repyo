@@ -8,6 +8,8 @@ import {
 import { logPermissionChange } from "@/lib/security/audit";
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import {
+  assertManagerInCompany,
+  ensureOrgUnitOfType,
   resolveAdminScope,
   scopeHasPermission,
   unitInScope,
@@ -24,14 +26,14 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id: orgUnitId } = await context.params;
+  const { id: requestedUnitId } = await context.params;
   const user = toSessionUser(session.user);
   const scope = await resolveAdminScope(user);
   const canAssign =
     hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REPS) ||
     scopeHasPermission(scope, ADMIN_PERMISSIONS.MANAGE_REPS);
 
-  if (!scope || !canAssign || !unitInScope(scope, orgUnitId)) {
+  if (!scope || !canAssign || !unitInScope(scope, requestedUnitId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -47,7 +49,7 @@ export async function POST(request: Request, context: RouteContext) {
       companyId: scope.companyId,
       role: { in: ["COMPANY_ADMIN", "REP"] },
     },
-    select: { id: true, role: true, orgUnitId: true },
+    select: { id: true, role: true, orgUnitId: true, managerId: true },
   });
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -59,6 +61,55 @@ export async function POST(request: Request, context: RouteContext) {
     !unitInScope(scope, target.orgUnitId)
   ) {
     return NextResponse.json({ error: "User is outside your scope" }, { status: 403 });
+  }
+
+  if (parsed.data.managerId === parsed.data.userId) {
+    return NextResponse.json(
+      { error: "A person cannot be their own designated manager" },
+      { status: 400 }
+    );
+  }
+
+  let nextManagerId: string | null =
+    parsed.data.managerId === undefined ? target.managerId : parsed.data.managerId;
+  if (nextManagerId) {
+    try {
+      await assertManagerInCompany(nextManagerId, scope.companyId);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid designated manager" },
+        { status: 400 }
+      );
+    }
+  }
+  if (target.role === "REP" && !nextManagerId) {
+    return NextResponse.json(
+      { error: "Every rep account must have a designated manager" },
+      { status: 400 }
+    );
+  }
+
+  let orgUnitId = requestedUnitId;
+  if (parsed.data.typeLabel) {
+    const managerUnit = nextManagerId
+      ? await db.user.findFirst({
+          where: { id: nextManagerId, companyId: scope.companyId },
+          select: { orgUnitId: true },
+        })
+      : null;
+    const parentId =
+      managerUnit?.orgUnitId && unitInScope(scope, managerUnit.orgUnitId)
+        ? managerUnit.orgUnitId
+        : requestedUnitId;
+
+    const roleUnit = await ensureOrgUnitOfType({
+      companyId: scope.companyId,
+      typeLabel: parsed.data.typeLabel,
+      parentId,
+      preferUnitId: target.orgUnitId,
+      scopedUnitIds: scope.isCompanyWide ? undefined : scope.unitIds,
+    });
+    orgUnitId = roleUnit.id;
   }
 
   const permissions =
@@ -80,15 +131,20 @@ export async function POST(request: Request, context: RouteContext) {
 
   await db.user.update({
     where: { id: parsed.data.userId },
-    data: { orgUnitId },
+    data: { orgUnitId, managerId: nextManagerId },
   });
 
   await logPermissionChange({
     targetUserId: parsed.data.userId,
     changedById: session.user.id,
     changeType: "ORG_UNIT_CHANGED",
-    beforeState: { orgUnitId: target.orgUnitId },
-    afterState: { orgUnitId, permissions: assignment.permissions },
+    beforeState: { orgUnitId: target.orgUnitId, managerId: target.managerId },
+    afterState: {
+      orgUnitId,
+      managerId: nextManagerId,
+      permissions: assignment.permissions,
+      typeLabel: parsed.data.typeLabel ?? null,
+    },
   });
 
   return NextResponse.json(assignment, { status: 201 });

@@ -31,6 +31,7 @@ type Person = {
 };
 
 type OrgPayload = {
+  companyName?: string;
   tree: OrgNode[];
   flat: { id: string; name: string; typeLabel: string; depth: number }[];
   people: Person[];
@@ -38,6 +39,21 @@ type OrgPayload = {
   canAssignPeople: boolean;
   scope: { isCompanyWide: boolean; permissions: string[] };
 };
+
+function roleFromPerson(
+  person: Person | undefined,
+  extraRoleLabels: string[] = []
+): { role: string; custom: string } {
+  const label = person?.homeOrgUnit?.typeLabel?.trim() ?? "";
+  if (!label) return { role: "", custom: "" };
+  if (
+    (ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label) ||
+    extraRoleLabels.includes(label)
+  ) {
+    return { role: label, custom: "" };
+  }
+  return { role: CUSTOM_ORG_UNIT_TYPE_VALUE, custom: label };
+}
 
 const PERMISSION_OPTIONS = [
   { id: "VIEW_METRICS", label: "View metrics" },
@@ -50,7 +66,13 @@ const PERMISSION_OPTIONS = [
   { id: "MANAGE_TERRITORY", label: "Manage territory" },
 ];
 
-export function CompanyOrgPage({ userName }: { userName: string }) {
+export function CompanyOrgPage({
+  userName,
+  companyName,
+}: {
+  userName: string;
+  companyName: string;
+}) {
   const [data, setData] = useState<OrgPayload | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -59,7 +81,8 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
   const [typeLabel, setTypeLabel] = useState<string>(ORG_UNIT_TYPE_SUGGESTIONS[0]);
   const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
-  const [assignUnitId, setAssignUnitId] = useState("");
+  const [assignRole, setAssignRole] = useState("");
+  const [customAssignRole, setCustomAssignRole] = useState("");
   const [assignManagerId, setAssignManagerId] = useState("");
   const [permissions, setPermissions] = useState<string[]>([
     "VIEW_METRICS",
@@ -74,11 +97,10 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
       const payload = await fetchJson<OrgPayload>("/api/company/org-units");
       setData(payload);
       if (!parentId && payload.flat[0]) setParentId(payload.flat[0].id);
-      if (!assignUnitId && payload.flat[0]) setAssignUnitId(payload.flat[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load organization");
     }
-  }, [parentId, assignUnitId]);
+  }, [parentId]);
 
   useEffect(() => {
     load();
@@ -87,6 +109,9 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
 
   const isCustomType = typeLabel === CUSTOM_ORG_UNIT_TYPE_VALUE;
   const resolvedTypeLabel = isCustomType ? customTypeLabel.trim() : typeLabel;
+  const isCustomAssignRole = assignRole === CUSTOM_ORG_UNIT_TYPE_VALUE;
+  const resolvedAssignRole = isCustomAssignRole ? customAssignRole.trim() : assignRole;
+  const displayedCompany = companyName || data?.companyName || "";
 
   async function addUnit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,26 +143,30 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
 
   async function assignMember(e: React.FormEvent) {
     e.preventDefault();
-    if (!assignUserId || !assignUnitId) return;
+    if (!assignUserId || !resolvedAssignRole) return;
+    const person = data?.people.find((p) => p.id === assignUserId);
+    if (person?.role === "REP" && !assignManagerId) {
+      setError("Every rep account must have a designated manager");
+      return;
+    }
+    const rootId = data?.flat.find((u) => u.depth === 0)?.id ?? data?.flat[0]?.id;
+    if (!rootId) {
+      setError("Create an organizational unit first");
+      return;
+    }
     setError("");
     setMessage("");
     try {
-      await fetchJson(`/api/company/org-units/${assignUnitId}/assignments`, {
+      await fetchJson(`/api/company/org-units/${rootId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: assignUserId, permissions }),
+        body: JSON.stringify({
+          userId: assignUserId,
+          permissions,
+          typeLabel: resolvedAssignRole,
+          managerId: assignManagerId || null,
+        }),
       });
-      const person = data?.people.find((p) => p.id === assignUserId);
-      if (person?.role === "REP") {
-        await fetchJson(`/api/company/reps/${assignUserId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orgUnitId: assignUnitId,
-            managerId: assignManagerId || person.managerId,
-          }),
-        });
-      }
       setMessage("Assignment saved");
       load();
     } catch (err) {
@@ -146,11 +175,27 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
   }
 
   const selectedPerson = data?.people.find((p) => p.id === assignUserId);
+  const extraRoleLabels = data
+    ? [
+        ...new Set(
+          data.flat
+            .map((u) => u.typeLabel)
+            .filter(
+              (label) =>
+                label &&
+                !(ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label)
+            )
+        ),
+      ]
+    : [];
 
   return (
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Organization</h1>
+        {displayedCompany && (
+          <p className="mt-1 text-sm font-semibold text-slate-800">{displayedCompany}</p>
+        )}
         <p className="mt-1 text-sm text-slate-600">
           Admins are assigned to a unit and can see that unit plus every unit below it.
           Choose a hierarchy unit (rep, team lead, sales manager, and so on) or create a new
@@ -313,7 +358,9 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                     setAssignUserId(e.target.value);
                     const person = data.people.find((p) => p.id === e.target.value);
                     setAssignManagerId(person?.managerId ?? "");
-                    setAssignUnitId(person?.orgUnitId ?? assignUnitId);
+                    const nextRole = roleFromPerson(person, extraRoleLabels);
+                    setAssignRole(nextRole.role);
+                    setCustomAssignRole(nextRole.custom);
                   }}
                   options={[
                     { value: "", label: "Select..." },
@@ -324,15 +371,37 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                   ]}
                 />
                 <Select
-                  label="Organizational unit"
-                  value={assignUnitId}
-                  onChange={(e) => setAssignUnitId(e.target.value)}
-                  options={data.flat.map((u) => ({
-                    value: u.id,
-                    label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
-                  }))}
+                  label="Organization role"
+                  value={assignRole}
+                  onChange={(e) => {
+                    setAssignRole(e.target.value);
+                    if (e.target.value !== CUSTOM_ORG_UNIT_TYPE_VALUE) {
+                      setCustomAssignRole("");
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "Select..." },
+                    ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({
+                      value: t,
+                      label: t,
+                    })),
+                    ...extraRoleLabels.map((t) => ({
+                      value: t,
+                      label: t,
+                    })),
+                    { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new role" },
+                  ]}
                 />
-                {selectedPerson?.role === "REP" && (
+                {isCustomAssignRole && (
+                  <Input
+                    label="New organization role"
+                    value={customAssignRole}
+                    onChange={(e) => setCustomAssignRole(e.target.value)}
+                    placeholder="e.g. Regional Director"
+                    required
+                  />
+                )}
+                {selectedPerson && (
                   <Select
                     label="Designated manager"
                     value={assignManagerId}
@@ -381,7 +450,15 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                     </div>
                   </div>
                 )}
-                <Button type="submit" className="w-full" disabled={!assignUserId || !assignUnitId}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={
+                    !assignUserId ||
+                    !resolvedAssignRole ||
+                    (selectedPerson?.role === "REP" && !assignManagerId)
+                  }
+                >
                   Save assignment
                 </Button>
               </form>
@@ -414,7 +491,8 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                       <p className="text-xs text-slate-500">{person.email}</p>
                     </td>
                     <td className="px-2 py-2 text-slate-600">
-                      {person.role === "REP" ? "Rep" : "Admin"}
+                      {person.homeOrgUnit?.typeLabel ??
+                        (person.role === "REP" ? "Rep" : "Admin")}
                     </td>
                     <td className="px-2 py-2 text-slate-600">
                       {person.homeOrgUnit

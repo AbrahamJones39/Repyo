@@ -5,8 +5,8 @@ import { NextResponse } from "next/server";
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import { logPermissionChange } from "@/lib/security/audit";
 import {
+  assertManagerInCompany,
   assertOrgUnitInCompany,
-  requireRepManager,
   resolveAdminScope,
   unitInScope,
   userIsInAdminScope,
@@ -36,23 +36,48 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Validation failed" }, { status: 400 });
     }
 
-    const rep = await db.user.findFirst({
-      where: { id, role: "REP", companyId: session.user.companyId ?? undefined },
-      select: { id: true, managerId: true, orgUnitId: true, companyId: true },
+    const member = await db.user.findFirst({
+      where: {
+        id,
+        role: { in: ["REP", "COMPANY_ADMIN"] },
+        companyId: session.user.companyId ?? undefined,
+      },
+      select: {
+        id: true,
+        role: true,
+        managerId: true,
+        orgUnitId: true,
+        companyId: true,
+      },
     });
-    if (!rep?.companyId) {
-      return NextResponse.json({ error: "Rep not found" }, { status: 404 });
+    if (!member?.companyId) {
+      return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
 
-    const nextManagerId =
-      parsed.data.managerId === undefined
-        ? rep.managerId
-        : await requireRepManager({
-            managerId: parsed.data.managerId,
-            companyId: rep.companyId,
-          });
+    if (parsed.data.managerId === id) {
+      return NextResponse.json(
+        { error: "A person cannot be their own designated manager" },
+        { status: 400 }
+      );
+    }
 
-    if (!nextManagerId) {
+    let nextManagerId: string | null =
+      parsed.data.managerId === undefined
+        ? member.managerId
+        : parsed.data.managerId;
+
+    if (nextManagerId) {
+      try {
+        await assertManagerInCompany(nextManagerId, member.companyId);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Invalid designated manager" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (member.role === "REP" && !nextManagerId) {
       return NextResponse.json(
         { error: "Every rep account must have a designated manager" },
         { status: 400 }
@@ -60,9 +85,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     let nextOrgUnitId =
-      parsed.data.orgUnitId === undefined ? rep.orgUnitId : parsed.data.orgUnitId;
+      parsed.data.orgUnitId === undefined ? member.orgUnitId : parsed.data.orgUnitId;
     if (nextOrgUnitId) {
-      await assertOrgUnitInCompany(nextOrgUnitId, rep.companyId);
+      await assertOrgUnitInCompany(nextOrgUnitId, member.companyId);
       if (scope && !unitInScope(scope, nextOrgUnitId)) {
         return NextResponse.json({ error: "Unit is outside your scope" }, { status: 403 });
       }
@@ -84,7 +109,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       targetUserId: id,
       changedById: session.user.id,
       changeType: "MANAGER_CHANGED",
-      beforeState: { managerId: rep.managerId, orgUnitId: rep.orgUnitId },
+      beforeState: { managerId: member.managerId, orgUnitId: member.orgUnitId },
       afterState: { managerId: nextManagerId, orgUnitId: nextOrgUnitId },
     });
 

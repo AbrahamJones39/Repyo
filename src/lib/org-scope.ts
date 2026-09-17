@@ -56,6 +56,68 @@ export async function ensureCompanyRootOrgUnit(
   });
 }
 
+/** Find a unit with this typeLabel in the company, or create one under parentId. */
+export async function ensureOrgUnitOfType(params: {
+  companyId: string;
+  typeLabel: string;
+  parentId?: string | null;
+  preferUnitId?: string | null;
+  scopedUnitIds?: string[];
+}): Promise<{ id: string }> {
+  const typeLabel = params.typeLabel.trim();
+  const inScope = (id: string) =>
+    !params.scopedUnitIds || params.scopedUnitIds.includes(id);
+
+  if (params.preferUnitId && inScope(params.preferUnitId)) {
+    const preferred = await db.orgUnit.findFirst({
+      where: {
+        id: params.preferUnitId,
+        companyId: params.companyId,
+        typeLabel,
+      },
+      select: { id: true },
+    });
+    if (preferred) return preferred;
+  }
+
+  if (params.parentId) {
+    const underParent = await db.orgUnit.findFirst({
+      where: {
+        companyId: params.companyId,
+        typeLabel,
+        parentId: params.parentId,
+        ...(params.scopedUnitIds ? { id: { in: params.scopedUnitIds } } : {}),
+      },
+      select: { id: true },
+    });
+    if (underParent) return underParent;
+  }
+
+  const existing = await db.orgUnit.findFirst({
+    where: {
+      companyId: params.companyId,
+      typeLabel,
+      ...(params.scopedUnitIds ? { id: { in: params.scopedUnitIds } } : {}),
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (existing) return existing;
+
+  const parentId =
+    params.parentId ?? (await ensureCompanyRootOrgUnit(params.companyId)).id;
+
+  return db.orgUnit.create({
+    data: {
+      companyId: params.companyId,
+      parentId,
+      name: typeLabel,
+      typeLabel,
+    },
+    select: { id: true },
+  });
+}
+
 /** Founding / unassigned company admins were seeing an empty tree because
  *  scope filtered to zero units. Place them on the company root so the
  *  hierarchy is visible and they can add units. */
