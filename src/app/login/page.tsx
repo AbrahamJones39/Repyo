@@ -4,10 +4,17 @@ import Link from "next/link";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
+
+const ROLE_HOME: Record<string, string> = {
+  PROVIDER: "/provider",
+  REP: "/rep",
+  COMPANY_ADMIN: "/company",
+  SUPER_ADMIN: "/admin",
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -46,12 +53,22 @@ function LoginForm() {
         return;
       }
 
+      const session = await getSession();
+      const role = session?.user?.role;
+      const roleRoute = (role && ROLE_HOME[role]) || "/";
       const safeCallback =
         callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
           ? callbackUrl
           : "/";
+      const destination =
+        role &&
+        safeCallback !== "/" &&
+        roleRoute !== "/" &&
+        safeCallback.startsWith(roleRoute)
+          ? safeCallback
+          : roleRoute;
 
-      router.push(safeCallback);
+      router.push(destination);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");

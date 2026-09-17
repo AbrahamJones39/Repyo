@@ -23,6 +23,7 @@ export const authConfig = {
           "REGISTERED";
         token.adminPermissions =
           (user as { adminPermissions?: string[] }).adminPermissions ?? [];
+        delete (token as { error?: string }).error;
       }
       return token;
     },
