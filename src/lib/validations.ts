@@ -475,3 +475,60 @@ export const signupSchema = z
       });
     }
   });
+
+const optionalText = z
+  .string()
+  .max(200)
+  .optional()
+  .nullable()
+  .transform((v) => {
+    if (v == null) return v;
+    const trimmed = v.trim();
+    return trimmed === "" ? null : trimmed;
+  });
+
+const optionalZip = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((v) => {
+    if (v == null) return v;
+    const trimmed = v.trim();
+    return trimmed === "" ? null : trimmed;
+  })
+  .refine((v) => v == null || /^\d{5}$/.test(v), "Valid 5-digit zip code required");
+
+export const updateOwnProfileSchema = z.object({
+  name: z.string().min(2, "Name is required").optional(),
+  phone: optionalText,
+  zipCodeStart: optionalZip,
+  zipCodeEnd: optionalZip,
+  status: z.enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"]).optional(),
+  onCallEnabled: z.boolean().optional(),
+  products: z.array(z.string()).optional(),
+  jobTitle: optionalText,
+  department: optionalText,
+  facilityName: optionalText,
+  facilityAddress: z
+    .string()
+    .max(300)
+    .optional()
+    .nullable()
+    .transform((v) => {
+      if (v == null) return v;
+      const trimmed = v.trim();
+      return trimmed === "" ? null : trimmed;
+    }),
+  facilityPhone: optionalText,
+  facilityContactName: optionalText,
+  facilityContactPhone: optionalText,
+  zipCode: optionalZip,
+  requesterPhone: optionalText,
+  requesterFax: optionalText,
+  defaultPhysician: optionalText,
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
