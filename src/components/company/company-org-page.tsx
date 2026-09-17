@@ -5,6 +5,10 @@ import { PortalShell } from "@/components/layout/portal-shell";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { fetchJson } from "@/lib/api-client";
+import {
+  CUSTOM_ORG_UNIT_TYPE_VALUE,
+  ORG_UNIT_TYPE_SUGGESTIONS,
+} from "@/lib/security/authorization";
 import { cn } from "@/lib/utils";
 
 type OrgNode = {
@@ -35,15 +39,6 @@ type OrgPayload = {
   scope: { isCompanyWide: boolean; permissions: string[] };
 };
 
-const UNIT_TYPE_SUGGESTIONS = [
-  "Company",
-  "Division",
-  "Region",
-  "Area",
-  "Territory",
-  "Team",
-];
-
 const PERMISSION_OPTIONS = [
   { id: "VIEW_METRICS", label: "View metrics" },
   { id: "MANAGE_REQUESTS", label: "Manage requests" },
@@ -61,7 +56,8 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
   const [message, setMessage] = useState("");
   const [parentId, setParentId] = useState("");
   const [unitName, setUnitName] = useState("");
-  const [typeLabel, setTypeLabel] = useState("Region");
+  const [typeLabel, setTypeLabel] = useState<string>(ORG_UNIT_TYPE_SUGGESTIONS[0]);
+  const [customTypeLabel, setCustomTypeLabel] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
   const [assignUnitId, setAssignUnitId] = useState("");
   const [assignManagerId, setAssignManagerId] = useState("");
@@ -89,17 +85,30 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isCustomType = typeLabel === CUSTOM_ORG_UNIT_TYPE_VALUE;
+  const resolvedTypeLabel = isCustomType ? customTypeLabel.trim() : typeLabel;
+
   async function addUnit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setMessage("");
+    if (!resolvedTypeLabel) {
+      setError("Enter a name for the new unit type");
+      return;
+    }
     try {
       await fetchJson("/api/company/org-units", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: unitName, typeLabel, parentId: parentId || null }),
+        body: JSON.stringify({
+          name: unitName,
+          typeLabel: resolvedTypeLabel,
+          parentId: parentId || null,
+        }),
       });
       setUnitName("");
+      setCustomTypeLabel("");
+      setTypeLabel(ORG_UNIT_TYPE_SUGGESTIONS[0]);
       setMessage("Organizational unit added");
       load();
     } catch (err) {
@@ -144,8 +153,8 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
         <h1 className="text-2xl font-bold text-slate-900">Organization</h1>
         <p className="mt-1 text-sm text-slate-600">
           Admins are assigned to a unit and can see that unit plus every unit below it.
-          Labels are flexible (company, division, region, area, territory, team, or your own).
-          This is operational access only — it does not grant patient information.
+          Choose a hierarchy unit (rep, team lead, sales manager, and so on) or create a new
+          unit type. This is operational access only — it does not grant patient information.
         </p>
       </div>
 
@@ -180,22 +189,34 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                 className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
               >
                 <h2 className="font-semibold text-slate-900">Add unit</h2>
+                <Select
+                  label="Hierarchy unit"
+                  value={typeLabel}
+                  onChange={(e) => setTypeLabel(e.target.value)}
+                  options={[
+                    ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({ value: t, label: t })),
+                    { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new unit..." },
+                  ]}
+                />
+                {isCustomType && (
+                  <Input
+                    label="New unit type"
+                    value={customTypeLabel}
+                    onChange={(e) => setCustomTypeLabel(e.target.value)}
+                    placeholder="e.g. Regional Director"
+                    required
+                  />
+                )}
                 <Input
                   label="Name"
                   value={unitName}
                   onChange={(e) => setUnitName(e.target.value)}
+                  placeholder={
+                    isCustomType
+                      ? "e.g. West Coast Regional Director"
+                      : `e.g. Phoenix ${typeLabel}`
+                  }
                   required
-                />
-                <Select
-                  label="Type label"
-                  value={typeLabel}
-                  onChange={(e) => setTypeLabel(e.target.value)}
-                  options={[
-                    ...UNIT_TYPE_SUGGESTIONS.map((t) => ({ value: t, label: t })),
-                    ...(!UNIT_TYPE_SUGGESTIONS.includes(typeLabel)
-                      ? [{ value: typeLabel, label: typeLabel }]
-                      : []),
-                  ]}
                 />
                 <Select
                   label="Parent unit"
@@ -206,7 +227,11 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                     label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
                   }))}
                 />
-                <Button type="submit" className="w-full" disabled={!unitName.trim()}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!unitName.trim() || !resolvedTypeLabel}
+                >
                   Add unit
                 </Button>
               </form>

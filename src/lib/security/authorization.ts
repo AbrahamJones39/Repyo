@@ -28,13 +28,19 @@ export const ADMIN_PERMISSIONS = {
 
 /** Suggested org-unit type labels — never enforced as an enum. */
 export const ORG_UNIT_TYPE_SUGGESTIONS = [
-  "Company",
-  "Division",
-  "Region",
-  "Area",
-  "Territory",
-  "Team",
+  "Rep",
+  "Team Lead",
+  "Senior Rep",
+  "Field Rep",
+  "Sales Lead",
+  "Sales Manager",
+  "Territory Manager",
+  "District Manager",
+  "President",
+  "Admin",
 ] as const;
+
+export const CUSTOM_ORG_UNIT_TYPE_VALUE = "__custom__";
 
 export const DEFAULT_ADMIN_SCOPE_PERMISSIONS = [
   ADMIN_PERMISSIONS.VIEW_METRICS,

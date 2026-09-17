@@ -232,13 +232,13 @@ export const createRepSchema = z.object({
 
 export const createOrgUnitSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  typeLabel: z.string().min(1).max(40).default("Unit"),
+  typeLabel: z.string().min(1).max(60).default("Unit"),
   parentId: z.string().uuid().nullable().optional(),
 });
 
 export const updateOrgUnitSchema = z.object({
   name: z.string().min(1).optional(),
-  typeLabel: z.string().min(1).max(40).optional(),
+  typeLabel: z.string().min(1).max(60).optional(),
   parentId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().optional(),
 });
