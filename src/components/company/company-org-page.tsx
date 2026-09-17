@@ -17,6 +17,8 @@ type OrgNode = {
   name: string;
   typeLabel: string;
   children: OrgNode[];
+  members?: { id: string }[];
+  assignments?: { id: string }[];
 };
 
 type Person = {
@@ -30,15 +32,25 @@ type Person = {
   homeOrgUnit: { id: string; name: string; typeLabel: string } | null;
 };
 
+type FlatUnit = {
+  id: string;
+  name: string;
+  typeLabel: string;
+  depth: number;
+  parentId?: string | null;
+};
+
 type OrgPayload = {
   companyName?: string;
   tree: OrgNode[];
-  flat: { id: string; name: string; typeLabel: string; depth: number }[];
+  flat: FlatUnit[];
   people: Person[];
   canManageStructure: boolean;
   canAssignPeople: boolean;
   scope: { isCompanyWide: boolean; permissions: string[] };
 };
+
+type TreeAction = "rename" | "move" | "delete";
 
 function roleFromPerson(
   person: Person | undefined,
@@ -90,13 +102,23 @@ export function CompanyOrgPage({
     "VIEW_CALENDAR",
     "VIEW_TEAM_CALENDAR",
   ]);
+  const [activeUnitId, setActiveUnitId] = useState<string | null>(null);
+  const [activeAction, setActiveAction] = useState<TreeAction | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editParentId, setEditParentId] = useState("");
+  const [savingUnit, setSavingUnit] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     try {
       const payload = await fetchJson<OrgPayload>("/api/company/org-units");
       setData(payload);
-      if (!parentId && payload.flat[0]) setParentId(payload.flat[0].id);
+      if (
+        payload.flat[0] &&
+        (!parentId || !payload.flat.some((unit) => unit.id === parentId))
+      ) {
+        setParentId(payload.flat[0].id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load organization");
     }
@@ -171,6 +193,105 @@ export function CompanyOrgPage({
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
+    }
+  }
+
+  function clearUnitAction() {
+    setActiveUnitId(null);
+    setActiveAction(null);
+    setEditName("");
+    setEditParentId("");
+  }
+
+  function startRename(node: OrgNode) {
+    setError("");
+    setMessage("");
+    setActiveUnitId(node.id);
+    setActiveAction("rename");
+    setEditName(node.name);
+    setEditParentId("");
+  }
+
+  function startMove(node: OrgNode) {
+    setError("");
+    setMessage("");
+    setActiveUnitId(node.id);
+    setActiveAction("move");
+    setEditName("");
+    setEditParentId(node.parentId ?? "");
+  }
+
+  function startDelete(node: OrgNode) {
+    setError("");
+    setMessage("");
+    setActiveUnitId(node.id);
+    setActiveAction("delete");
+    setEditName("");
+    setEditParentId("");
+  }
+
+  async function saveRename(unitId: string) {
+    const name = editName.trim();
+    if (!name) {
+      setError("Enter a name");
+      return;
+    }
+    setError("");
+    setMessage("");
+    setSavingUnit(true);
+    try {
+      await fetchJson(`/api/company/org-units/${unitId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      setMessage("Unit renamed");
+      clearUnitAction();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rename unit");
+    } finally {
+      setSavingUnit(false);
+    }
+  }
+
+  async function saveMove(unitId: string) {
+    if (!editParentId) {
+      setError("Choose a parent unit");
+      return;
+    }
+    setError("");
+    setMessage("");
+    setSavingUnit(true);
+    try {
+      await fetchJson(`/api/company/org-units/${unitId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: editParentId }),
+      });
+      setMessage("Unit moved");
+      clearUnitAction();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to move unit");
+    } finally {
+      setSavingUnit(false);
+    }
+  }
+
+  async function confirmDelete(unitId: string) {
+    setError("");
+    setMessage("");
+    setSavingUnit(true);
+    try {
+      await fetchJson(`/api/company/org-units/${unitId}`, { method: "DELETE" });
+      setMessage("Unit deleted");
+      clearUnitAction();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete unit");
+    } finally {
+      setSavingUnit(false);
     }
   }
 
@@ -258,7 +379,29 @@ export function CompanyOrgPage({
                   )}
                 </div>
               ) : (
-                data.tree.map((node) => <OrgTreeNode key={node.id} node={node} />)
+                data.tree.map((node) => (
+                  <OrgTreeNode
+                    key={node.id}
+                    node={node}
+                    flat={data.flat}
+                    people={data.people}
+                    canManage={data.canManageStructure}
+                    activeUnitId={activeUnitId}
+                    activeAction={activeAction}
+                    editName={editName}
+                    editParentId={editParentId}
+                    saving={savingUnit}
+                    onEditName={setEditName}
+                    onEditParent={setEditParentId}
+                    onStartRename={startRename}
+                    onStartMove={startMove}
+                    onStartDelete={startDelete}
+                    onCancel={clearUnitAction}
+                    onSaveRename={saveRename}
+                    onSaveMove={saveMove}
+                    onConfirmDelete={confirmDelete}
+                  />
+                ))
               )}
             </div>
           </div>
@@ -513,20 +656,228 @@ export function CompanyOrgPage({
   );
 }
 
-function OrgTreeNode({ node, depth = 0 }: { node: OrgNode; depth?: number }) {
+function collectDescendantIds(node: OrgNode): string[] {
+  return [node.id, ...node.children.flatMap(collectDescendantIds)];
+}
+
+function unitHasPeople(node: OrgNode, people: Person[]) {
+  return (
+    (node.members?.length ?? 0) > 0 ||
+    (node.assignments?.length ?? 0) > 0 ||
+    people.some((person) => person.orgUnitId === node.id)
+  );
+}
+
+function OrgTreeNode({
+  node,
+  depth = 0,
+  flat,
+  people,
+  canManage,
+  activeUnitId,
+  activeAction,
+  editName,
+  editParentId,
+  saving,
+  onEditName,
+  onEditParent,
+  onStartRename,
+  onStartMove,
+  onStartDelete,
+  onCancel,
+  onSaveRename,
+  onSaveMove,
+  onConfirmDelete,
+}: {
+  node: OrgNode;
+  depth?: number;
+  flat: FlatUnit[];
+  people: Person[];
+  canManage: boolean;
+  activeUnitId: string | null;
+  activeAction: TreeAction | null;
+  editName: string;
+  editParentId: string;
+  saving: boolean;
+  onEditName: (value: string) => void;
+  onEditParent: (value: string) => void;
+  onStartRename: (node: OrgNode) => void;
+  onStartMove: (node: OrgNode) => void;
+  onStartDelete: (node: OrgNode) => void;
+  onCancel: () => void;
+  onSaveRename: (unitId: string) => void;
+  onSaveMove: (unitId: string) => void;
+  onConfirmDelete: (unitId: string) => void;
+}) {
+  const isRoot = !node.parentId;
+  const isActive = activeUnitId === node.id;
+  const blockedParentIds = new Set(collectDescendantIds(node));
+  const parentOptions = flat
+    .filter((unit) => !blockedParentIds.has(unit.id))
+    .map((unit) => ({
+      value: unit.id,
+      label: `${"— ".repeat(unit.depth)}${unit.name} (${unit.typeLabel})`,
+    }));
+  const parentName =
+    flat.find((unit) => unit.id === node.parentId)?.name ?? "the parent unit";
+  const hasPeople = unitHasPeople(node, people);
+
   return (
     <div>
       <div
-        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
+        className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-sm"
         style={{ paddingLeft: 8 + depth * 16 }}
       >
         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
           {node.typeLabel}
         </span>
         <span className="font-medium text-slate-900">{node.name}</span>
+        {canManage && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="text-xs font-medium text-rose-700 hover:underline"
+              onClick={() => onStartRename(node)}
+            >
+              Rename
+            </button>
+            {!isRoot && (
+              <button
+                type="button"
+                className="text-xs font-medium text-rose-700 hover:underline"
+                onClick={() => onStartMove(node)}
+                disabled={parentOptions.length === 0}
+              >
+                Move
+              </button>
+            )}
+            {!isRoot && (
+              <button
+                type="button"
+                className="text-xs font-medium text-red-600 hover:underline"
+                onClick={() => onStartDelete(node)}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {isActive && activeAction === "rename" && (
+        <form
+          className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
+          style={{ marginLeft: 8 + depth * 16 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSaveRename(node.id);
+          }}
+        >
+          <Input
+            id={`rename-unit-${node.id}`}
+            label="Name"
+            value={editName}
+            onChange={(e) => onEditName(e.target.value)}
+            required
+          />
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={saving || !editName.trim()}>
+              Save
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {isActive && activeAction === "move" && (
+        <form
+          className="mb-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
+          style={{ marginLeft: 8 + depth * 16 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSaveMove(node.id);
+          }}
+        >
+          <Select
+            id={`move-unit-${node.id}`}
+            label="Parent unit"
+            value={editParentId}
+            onChange={(e) => onEditParent(e.target.value)}
+            options={
+              parentOptions.length > 0
+                ? parentOptions
+                : [{ value: "", label: "No eligible parent" }]
+            }
+          />
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={saving || !editParentId}>
+              Save
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {isActive && activeAction === "delete" && (
+        <div
+          className="mb-2 space-y-2 rounded-lg border border-red-100 bg-red-50 p-3"
+          style={{ marginLeft: 8 + depth * 16 }}
+        >
+          {hasPeople ? (
+            <p className="text-sm text-red-700">
+              Reassign people on this unit before deleting it.
+            </p>
+          ) : (
+            <p className="text-sm text-red-700">
+              Delete {node.name}? Child units will move under {parentName}.
+            </p>
+          )}
+          <div className="flex gap-2">
+            {!hasPeople && (
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                disabled={saving}
+                onClick={() => onConfirmDelete(node.id)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       {node.children.map((child) => (
-        <OrgTreeNode key={child.id} node={child} depth={depth + 1} />
+        <OrgTreeNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          flat={flat}
+          people={people}
+          canManage={canManage}
+          activeUnitId={activeUnitId}
+          activeAction={activeAction}
+          editName={editName}
+          editParentId={editParentId}
+          saving={saving}
+          onEditName={onEditName}
+          onEditParent={onEditParent}
+          onStartRename={onStartRename}
+          onStartMove={onStartMove}
+          onStartDelete={onStartDelete}
+          onCancel={onCancel}
+          onSaveRename={onSaveRename}
+          onSaveMove={onSaveMove}
+          onConfirmDelete={onConfirmDelete}
+        />
       ))}
     </div>
   );

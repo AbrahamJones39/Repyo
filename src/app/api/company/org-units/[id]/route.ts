@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import {
   canManageOrgStructure,
+  getDescendantUnitIds,
   resolveAdminScope,
   unitInScope,
 } from "@/lib/org-scope";
@@ -29,12 +30,49 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 
-  if (parsed.data.parentId === id) {
-    return NextResponse.json({ error: "A unit cannot be its own parent" }, { status: 400 });
-  }
+  const unit = await db.orgUnit.findFirst({
+    where: { id, companyId: scope.companyId },
+    select: { id: true, parentId: true },
+  });
+  if (!unit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (parsed.data.parentId && !unitInScope(scope, parsed.data.parentId)) {
-    return NextResponse.json({ error: "Parent unit is outside your scope" }, { status: 403 });
+  if (parsed.data.parentId !== undefined) {
+    if (parsed.data.parentId === id) {
+      return NextResponse.json({ error: "A unit cannot be its own parent" }, { status: 400 });
+    }
+
+    if (parsed.data.parentId === null) {
+      if (unit.parentId !== null) {
+        return NextResponse.json(
+          { error: "A company can only have one root unit" },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!unit.parentId) {
+        return NextResponse.json(
+          { error: "The company root unit cannot be moved" },
+          { status: 400 }
+        );
+      }
+      if (!unitInScope(scope, parsed.data.parentId)) {
+        return NextResponse.json({ error: "Parent unit is outside your scope" }, { status: 403 });
+      }
+      const parent = await db.orgUnit.findFirst({
+        where: { id: parsed.data.parentId, companyId: scope.companyId },
+        select: { id: true },
+      });
+      if (!parent) {
+        return NextResponse.json({ error: "Parent unit not found" }, { status: 400 });
+      }
+      const descendants = await getDescendantUnitIds(scope.companyId, [id]);
+      if (descendants.includes(parsed.data.parentId)) {
+        return NextResponse.json(
+          { error: "A unit cannot be moved under one of its descendants" },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const updated = await db.orgUnit.update({
@@ -65,7 +103,18 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   const unit = await db.orgUnit.findFirst({
     where: { id, companyId: scope.companyId },
-    select: { parentId: true, _count: { select: { children: true } } },
+    select: {
+      parentId: true,
+      _count: {
+        select: {
+          children: true,
+          members: true,
+          assignments: true,
+          teams: true,
+          invitations: true,
+        },
+      },
+    },
   });
   if (!unit) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!unit.parentId) {
@@ -74,13 +123,34 @@ export async function DELETE(_request: Request, context: RouteContext) {
       { status: 400 }
     );
   }
-  if (unit._count.children > 0) {
+  if (unit._count.members > 0 || unit._count.assignments > 0) {
     return NextResponse.json(
-      { error: "Move or delete child units first" },
+      { error: "Reassign people on this unit before deleting it" },
       { status: 400 }
     );
   }
 
-  await db.orgUnit.delete({ where: { id } });
+  await db.$transaction(async (tx) => {
+    if (unit._count.children > 0) {
+      await tx.orgUnit.updateMany({
+        where: { parentId: id, companyId: scope.companyId },
+        data: { parentId: unit.parentId },
+      });
+    }
+    if (unit._count.teams > 0) {
+      await tx.companyTeam.updateMany({
+        where: { orgUnitId: id, companyId: scope.companyId },
+        data: { orgUnitId: unit.parentId },
+      });
+    }
+    if (unit._count.invitations > 0) {
+      await tx.platformInvitation.updateMany({
+        where: { orgUnitId: id, companyId: scope.companyId },
+        data: { orgUnitId: unit.parentId },
+      });
+    }
+    await tx.orgUnit.delete({ where: { id } });
+  });
+
   return NextResponse.json({ ok: true });
 }
