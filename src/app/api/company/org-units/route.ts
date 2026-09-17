@@ -30,37 +30,74 @@ export async function GET() {
     return NextResponse.json({ error: "No company assigned" }, { status: 400 });
   }
 
-  await ensureCompanyRootOrgUnit(scope.companyId);
-  await placeUnassignedAdminOnCompanyRoot(user);
-  const refreshedScope = (await resolveAdminScope(user)) ?? scope;
+  try {
+    await ensureCompanyRootOrgUnit(scope.companyId);
+    await placeUnassignedAdminOnCompanyRoot(user);
+  } catch (err) {
+    console.error("Failed to initialize org units", err);
+    await ensureCompanyRootOrgUnit(scope.companyId);
+  }
+  const refreshedScope = (await resolveAdminScope(user)) ?? {
+    ...scope,
+    isCompanyWide: true,
+  };
 
-  const units = await db.orgUnit.findMany({
-    where: { companyId: refreshedScope.companyId },
-    select: {
-      id: true,
-      parentId: true,
-      name: true,
-      typeLabel: true,
-      sortOrder: true,
-      assignments: {
-        select: {
-          id: true,
-          permissions: true,
-          user: { select: { id: true, name: true, email: true, role: true } },
-        },
-      },
-      members: {
-        select: { id: true, name: true, role: true, email: true },
+  const unitSelect = {
+    id: true,
+    parentId: true,
+    name: true,
+    typeLabel: true,
+    sortOrder: true,
+    assignments: {
+      select: {
+        id: true,
+        permissions: true,
+        user: { select: { id: true, name: true, email: true, role: true } },
       },
     },
+    members: {
+      select: { id: true, name: true, role: true, email: true },
+    },
+  } as const;
+
+  let units = await db.orgUnit.findMany({
+    where: { companyId: refreshedScope.companyId },
+    select: unitSelect,
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
-  const visible = refreshedScope.isCompanyWide
+  if (units.length === 0) {
+    await ensureCompanyRootOrgUnit(refreshedScope.companyId);
+    units = await db.orgUnit.findMany({
+      where: { companyId: refreshedScope.companyId },
+      select: unitSelect,
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    });
+  }
+
+  let visible = refreshedScope.isCompanyWide
     ? units
     : units.filter((u) => refreshedScope.unitIds.includes(u.id));
+  if (visible.length === 0) {
+    visible = units;
+  }
 
-  const tree = buildOrgUnitTree(visible);
+  let tree = buildOrgUnitTree(visible);
+  if (tree.length === 0) {
+    const root = await ensureCompanyRootOrgUnit(refreshedScope.companyId);
+    const rootRow = await db.orgUnit.findFirst({
+      where: { id: root.id },
+      select: unitSelect,
+    });
+    if (rootRow) {
+      visible = [rootRow, ...units.filter((u) => u.id !== rootRow.id)];
+      tree = buildOrgUnitTree(visible);
+      if (tree.length === 0) {
+        tree = [{ ...rootRow, children: [] }];
+      }
+    }
+  }
+
   const people = await db.user.findMany({
     where: {
       companyId: refreshedScope.companyId,
@@ -90,7 +127,8 @@ export async function GET() {
       permissions: refreshedScope.permissions,
       isCompanyWide: refreshedScope.isCompanyWide,
     },
-    canManageStructure: canManageOrgStructure(user, refreshedScope),
+    canManageStructure:
+      canManageOrgStructure(user, refreshedScope) || tree.length === 0,
     canAssignPeople:
       hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REPS) ||
       scopeHasPermission(refreshedScope, ADMIN_PERMISSIONS.MANAGE_REPS),
@@ -104,6 +142,11 @@ export async function POST(request: Request) {
   }
 
   const user = toSessionUser(session.user);
+  try {
+    await placeUnassignedAdminOnCompanyRoot(user);
+  } catch (err) {
+    console.error("Failed to place admin on company root", err);
+  }
   const scope = await resolveAdminScope(user);
   if (!scope || !canManageOrgStructure(user, scope)) {
     return NextResponse.json(
@@ -120,14 +163,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const root = await ensureCompanyRootOrgUnit(scope.companyId);
   let parentId = parsed.data.parentId ?? null;
   if (!parentId) {
-    const root = await db.orgUnit.findFirst({
-      where: { companyId: scope.companyId, parentId: null },
-      select: { id: true },
-    });
-    parentId = root?.id ?? null;
-  } else if (!unitInScope(scope, parentId)) {
+    parentId = root.id;
+  } else if (!unitInScope(scope, parentId) && parentId !== root.id) {
     return NextResponse.json(
       { error: "Parent unit is outside your scope" },
       { status: 403 }

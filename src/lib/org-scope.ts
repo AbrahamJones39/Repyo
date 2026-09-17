@@ -64,20 +64,27 @@ export async function placeUnassignedAdminOnCompanyRoot(
 ): Promise<void> {
   if (user.role !== "COMPANY_ADMIN" || !user.companyId) return;
 
-  const [assignmentCount, dbUser] = await Promise.all([
-    db.orgUnitAssignment.count({ where: { userId: user.id } }),
-    db.user.findUnique({
-      where: { id: user.id },
-      select: { orgUnitId: true, adminPermissions: true },
-    }),
-  ]);
+  const dbUser = await db.user.findUnique({
+    where: { id: user.id },
+    select: { orgUnitId: true, adminPermissions: true },
+  });
 
   if (!dbUser) return;
-  if (assignmentCount > 0 || dbUser.orgUnitId) return;
+
+  const homeUnit = dbUser.orgUnitId
+    ? await db.orgUnit.findFirst({
+        where: { id: dbUser.orgUnitId, companyId: user.companyId },
+        select: { id: true },
+      })
+    : null;
+  const assignmentInCompany = await db.orgUnitAssignment.count({
+    where: { userId: user.id, orgUnit: { companyId: user.companyId } },
+  });
+  if (assignmentInCompany > 0 || homeUnit) return;
 
   const root = await ensureCompanyRootOrgUnit(user.companyId);
   const permissions =
-    dbUser.adminPermissions.length > 0
+    (dbUser.adminPermissions ?? []).length > 0
       ? dbUser.adminPermissions
       : [...COMPANY_WIDE_ADMIN_PERMISSIONS];
 
@@ -86,7 +93,7 @@ export async function placeUnassignedAdminOnCompanyRoot(
       where: { id: user.id },
       data: {
         orgUnitId: root.id,
-        ...(dbUser.adminPermissions.length === 0
+        ...((dbUser.adminPermissions ?? []).length === 0
           ? { adminPermissions: [...COMPANY_WIDE_ADMIN_PERMISSIONS] }
           : {}),
       },
@@ -190,6 +197,17 @@ export function buildOrgUnitTree(
     list.forEach((n) => sortTree(n.children));
   };
   sortTree(roots);
+
+  if (roots.length === 0 && nodes.size > 0) {
+    const childIds = new Set<string>();
+    for (const node of nodes.values()) {
+      for (const child of node.children) childIds.add(child.id);
+    }
+    const orphans = [...nodes.values()].filter((n) => !childIds.has(n.id));
+    sortTree(orphans);
+    return orphans.length > 0 ? orphans : [...nodes.values()];
+  }
+
   return roots;
 }
 
@@ -475,6 +493,7 @@ export function canViewOperationalMetrics(user: SessionUser, scope: AdminScope |
 
 export function canManageOrgStructure(user: SessionUser, scope: AdminScope | null): boolean {
   if (user.role === "SUPER_ADMIN") return true;
+  if (user.role === "COMPANY_ADMIN" && scope?.isCompanyWide) return true;
   if (!scope) return false;
   return (
     hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_ORG_UNITS) ||

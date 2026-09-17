@@ -175,7 +175,43 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
             <h2 className="font-semibold text-slate-900">Hierarchy</h2>
             <div className="mt-4 space-y-1">
               {data.tree.length === 0 ? (
-                <p className="text-sm text-slate-500">No units yet.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Your company does not have a hierarchy yet. Pick a unit type below to
+                    create the first one.
+                  </p>
+                  {data.canManageStructure && (
+                    <div className="flex flex-wrap gap-2">
+                      {ORG_UNIT_TYPE_SUGGESTIONS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTypeLabel(t)}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-medium",
+                            typeLabel === t
+                              ? "border-rose-300 bg-rose-50 text-rose-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          )}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setTypeLabel(CUSTOM_ORG_UNIT_TYPE_VALUE)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium",
+                          isCustomType
+                            ? "border-rose-300 bg-rose-50 text-rose-700"
+                            : "border-dashed border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                        )}
+                      >
+                        Create a new unit
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 data.tree.map((node) => <OrgTreeNode key={node.id} node={node} />)
               )}
@@ -183,7 +219,7 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
           </div>
 
           <div className="space-y-6 lg:col-span-2">
-            {data.canManageStructure && (
+            {(data.canManageStructure || data.tree.length === 0) && (
               <form
                 onSubmit={addUnit}
                 className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
@@ -245,10 +281,14 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                   label="Parent unit"
                   value={parentId}
                   onChange={(e) => setParentId(e.target.value)}
-                  options={data.flat.map((u) => ({
-                    value: u.id,
-                    label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
-                  }))}
+                  options={
+                    data.flat.length > 0
+                      ? data.flat.map((u) => ({
+                          value: u.id,
+                          label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
+                        }))
+                      : [{ value: "", label: "No parent yet — this will be the first unit" }]
+                  }
                 />
                 <Button
                   type="submit"
