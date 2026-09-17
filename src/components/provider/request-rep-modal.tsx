@@ -650,7 +650,7 @@ export function RequestRepModal({
                 name="deviceManufacturerField"
                 value={deviceManufacturer}
                 onChange={(e) => setDeviceManufacturer(e.target.value)}
-                placeholder="e.g. Medtronic, Boston Scientific"
+                placeholder="e.g. Medtronic, Abbott, Biotronik"
                 required
               />
               <div className="flex flex-wrap items-center gap-3">

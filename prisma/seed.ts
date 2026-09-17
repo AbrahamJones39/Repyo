@@ -21,6 +21,105 @@ const DEMO_EMAILS = [
   "super@demo.com",
 ];
 
+type DeviceCompanySeed = {
+  name: string;
+  slug: string;
+  products: string[];
+  manufacturerAliases: string[];
+  userVerificationMethod?: "APPROVED_EMAIL_DOMAIN";
+  approvedEmailDomains?: string[];
+};
+
+/** Active device companies shown in request + signup company selects. */
+const DEVICE_COMPANIES: DeviceCompanySeed[] = [
+  {
+    name: "Abbott",
+    slug: "abbott",
+    products: ["PPM", "ICD", "CRT-D", "CRT-P", "Leadless PPM", "Structural Heart"],
+    manufacturerAliases: ["Abbott Laboratories", "ABT", "St. Jude", "St Jude Medical", "SJM"],
+  },
+  {
+    name: "Abiomed",
+    slug: "abiomed",
+    products: ["Structural Heart", "Other"],
+    manufacturerAliases: ["Abiomed Inc", "Impella"],
+  },
+  {
+    name: "AtriCure",
+    slug: "atricure",
+    products: ["Ablation", "Structural Heart"],
+    manufacturerAliases: ["AtriCure Inc"],
+  },
+  {
+    name: "Biotronik",
+    slug: "biotronik",
+    products: ["PPM", "ICD", "CRT-D", "CRT-P", "Loop"],
+    manufacturerAliases: ["BIOTRONIK", "Biotronik SE"],
+  },
+  {
+    name: "Boston Scientific",
+    slug: "boston-scientific",
+    products: ["Watchman", "ICD", "CRT-D", "Ablation"],
+    manufacturerAliases: ["Boston Sci", "BSX"],
+  },
+  {
+    name: "Cook Medical",
+    slug: "cook-medical",
+    products: ["Extraction", "Other"],
+    manufacturerAliases: ["Cook", "Cook Group"],
+  },
+  {
+    name: "Edwards Lifesciences",
+    slug: "edwards-lifesciences",
+    products: ["Structural Heart"],
+    manufacturerAliases: ["Edwards", "EW"],
+  },
+  {
+    name: "Impulse Dynamics",
+    slug: "impulse-dynamics",
+    products: ["Other"],
+    manufacturerAliases: ["Optimizer", "Impulse Dynamics NV"],
+  },
+  {
+    name: "Johnson & Johnson MedTech",
+    slug: "johnson-johnson-medtech",
+    products: ["Ablation", "EP Study", "Structural Heart"],
+    manufacturerAliases: ["J&J", "JNJ", "Biosense Webster", "Shockwave"],
+  },
+  {
+    name: "Medtronic",
+    slug: "medtronic",
+    products: ["PPM", "ICD", "CRT-D", "CRT-P", "Loop", "Leadless PPM"],
+    manufacturerAliases: ["Medtronic Inc", "MDT"],
+    userVerificationMethod: "APPROVED_EMAIL_DOMAIN",
+    approvedEmailDomains: ["medtronic.com"],
+  },
+  {
+    name: "MicroPort CRM",
+    slug: "microport-crm",
+    products: ["PPM", "ICD", "CRT-D", "CRT-P"],
+    manufacturerAliases: ["MicroPort", "LivaNova CRM", "Sorin"],
+  },
+  {
+    name: "Philips",
+    slug: "philips",
+    products: ["EP Study", "Ablation", "Other"],
+    manufacturerAliases: ["Philips Healthcare", "Koninklijke Philips"],
+  },
+  {
+    name: "Terumo",
+    slug: "terumo",
+    products: ["Structural Heart", "Other"],
+    manufacturerAliases: ["Terumo Corporation", "Terumo Interventional"],
+  },
+  {
+    name: "Zoll Medical",
+    slug: "zoll-medical",
+    products: ["ICD", "Other"],
+    manufacturerAliases: ["ZOLL", "Zoll", "Asahi Kasei Zoll"],
+  },
+];
+
 function hoursFromNow(h: number) {
   return new Date(Date.now() + h * 60 * 60 * 1000);
 }
@@ -120,39 +219,37 @@ async function main() {
     verifiedAt: new Date("2025-01-01"),
   };
 
-  const medtronic = await db.company.upsert({
-    where: { slug: "medtronic" },
-    update: {
-      products: ["PPM", "ICD", "CRT-D", "CRT-P", "Loop", "Leadless PPM"],
-      manufacturerAliases: ["Medtronic Inc", "MDT"],
-      active: true,
-      userVerificationMethod: "APPROVED_EMAIL_DOMAIN",
-      approvedEmailDomains: ["medtronic.com"],
-    },
-    create: {
-      name: "Medtronic",
-      slug: "medtronic",
-      products: ["PPM", "ICD", "CRT-D", "CRT-P", "Loop", "Leadless PPM"],
-      manufacturerAliases: ["Medtronic Inc", "MDT"],
-      userVerificationMethod: "APPROVED_EMAIL_DOMAIN",
-      approvedEmailDomains: ["medtronic.com"],
-    },
-  });
+  const companiesBySlug = new Map<string, { id: string; name: string }>();
+  for (const company of DEVICE_COMPANIES) {
+    const extras = company.userVerificationMethod
+      ? {
+          userVerificationMethod: company.userVerificationMethod,
+          approvedEmailDomains: company.approvedEmailDomains ?? [],
+        }
+      : {};
+    const record = await db.company.upsert({
+      where: { slug: company.slug },
+      update: {
+        name: company.name,
+        products: company.products,
+        manufacturerAliases: company.manufacturerAliases,
+        active: true,
+        ...extras,
+      },
+      create: {
+        name: company.name,
+        slug: company.slug,
+        products: company.products,
+        manufacturerAliases: company.manufacturerAliases,
+        ...extras,
+      },
+    });
+    companiesBySlug.set(company.slug, record);
+  }
 
-  const boston = await db.company.upsert({
-    where: { slug: "boston-scientific" },
-    update: {
-      products: ["Watchman", "ICD", "CRT-D", "Ablation"],
-      manufacturerAliases: ["Boston Sci", "BSX"],
-      active: true,
-    },
-    create: {
-      name: "Boston Scientific",
-      slug: "boston-scientific",
-      products: ["Watchman", "ICD", "CRT-D", "Ablation"],
-      manufacturerAliases: ["Boston Sci", "BSX"],
-    },
-  });
+  const medtronic = companiesBySlug.get("medtronic")!;
+  const boston = companiesBySlug.get("boston-scientific")!;
+  console.log(`Seeded ${DEVICE_COMPANIES.length} device companies`);
 
   const valleyFacility =
     (await db.facility.findFirst({ where: { name: "Valley Heart Center" } })) ??
