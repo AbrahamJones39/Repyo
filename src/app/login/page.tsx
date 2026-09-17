@@ -2,25 +2,18 @@
 
 import Link from "next/link";
 import { BrandMark } from "@/components/shared/brand-mark";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
 
-const ROLE_HOME: Record<string, string> = {
-  PROVIDER: "/provider",
-  REP: "/rep",
-  COMPANY_ADMIN: "/company",
-  SUPER_ADMIN: "/admin",
-};
-
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
   const sessionError = searchParams.get("error") === "session";
+  const credentialsError = searchParams.get("error") === "CredentialsSignin";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -40,36 +33,17 @@ function LoginForm() {
       return;
     }
 
+    const safeCallback =
+      callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
+        ? callbackUrl
+        : "/";
+
     try {
-      const result = await signIn("credentials", {
+      await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        callbackUrl: safeCallback,
       });
-
-      if (result?.error) {
-        setError("Invalid email or password");
-        setLoading(false);
-        return;
-      }
-
-      const session = await getSession();
-      const role = session?.user?.role;
-      const roleRoute = (role && ROLE_HOME[role]) || "/";
-      const safeCallback =
-        callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
-          ? callbackUrl
-          : "/";
-      const destination =
-        role &&
-        safeCallback !== "/" &&
-        roleRoute !== "/" &&
-        safeCallback.startsWith(roleRoute)
-          ? safeCallback
-          : roleRoute;
-
-      router.push(destination);
-      router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -87,9 +61,11 @@ function LoginForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {sessionError && (
+          {(sessionError || credentialsError) && (
             <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Your session expired. Sign in again to continue.
+              {credentialsError
+                ? "Invalid email or password."
+                : "Your session expired. Sign in again to continue."}
             </div>
           )}
           {error && (
