@@ -35,7 +35,6 @@ interface OrgMember {
   facilityName: string | null;
   accountStatus: string;
   verificationDecision: string | null;
-  isOrgAdministrator: boolean;
 }
 
 interface AccessLead {
@@ -104,7 +103,7 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
   async function memberAction(
     orgId: string,
     userId: string,
-    action: "approve" | "grant_org_admin" | "revoke_org_admin"
+    action: "approve"
   ) {
     try {
       await fetchJson(`/api/admin/organizations/${orgId}/members`, {
@@ -312,11 +311,6 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
                             <div>
                               <p className="font-medium text-slate-900">
                                 {member.name}
-                                {member.isOrgAdministrator && (
-                                  <span className="ml-2 rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-700">
-                                    Org Admin
-                                  </span>
-                                )}
                               </p>
                               <p className="text-slate-600">
                                 {member.email}
@@ -344,31 +338,6 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
                                   }
                                 >
                                   Approve
-                                </Button>
-                              )}
-                              {!member.isOrgAdministrator ? (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() =>
-                                    memberAction(org.id, member.userId, "grant_org_admin")
-                                  }
-                                >
-                                  Make Org Admin
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    memberAction(
-                                      org.id,
-                                      member.userId,
-                                      "revoke_org_admin"
-                                    )
-                                  }
-                                >
-                                  Remove Admin
                                 </Button>
                               )}
                             </div>
