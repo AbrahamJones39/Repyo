@@ -138,10 +138,9 @@ export function CompanyOrgPage({
         ...new Set(
           data.people
             .map((p) => p.homeOrgUnit?.typeLabel)
+            .filter((label): label is string => typeof label === "string" && label.length > 0)
             .filter(
-              (label): label is string =>
-                Boolean(label) &&
-                !(ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label)
+              (label) => !(ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label)
             )
         ),
       ]
