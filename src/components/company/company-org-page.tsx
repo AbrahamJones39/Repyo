@@ -189,15 +189,38 @@ export function CompanyOrgPage({ userName }: { userName: string }) {
                 className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
               >
                 <h2 className="font-semibold text-slate-900">Add unit</h2>
-                <Select
-                  label="Hierarchy unit"
-                  value={typeLabel}
-                  onChange={(e) => setTypeLabel(e.target.value)}
-                  options={[
-                    ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({ value: t, label: t })),
-                    { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new unit..." },
-                  ]}
-                />
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-700">Hierarchy unit</p>
+                  <div className="flex flex-wrap gap-2">
+                    {ORG_UNIT_TYPE_SUGGESTIONS.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTypeLabel(t)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium",
+                          typeLabel === t
+                            ? "border-rose-300 bg-rose-50 text-rose-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setTypeLabel(CUSTOM_ORG_UNIT_TYPE_VALUE)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-medium",
+                        isCustomType
+                          ? "border-rose-300 bg-rose-50 text-rose-700"
+                          : "border-dashed border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                      )}
+                    >
+                      Create a new unit
+                    </button>
+                  </div>
+                </div>
                 {isCustomType && (
                   <Input
                     label="New unit type"

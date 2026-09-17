@@ -252,5 +252,15 @@ export async function completeSignup(params: {
     }
   }
 
+  if (role === "COMPANY_ADMIN" && companyId) {
+    const { placeUnassignedAdminOnCompanyRoot } = await import("@/lib/org-scope");
+    await placeUnassignedAdminOnCompanyRoot({
+      id: user.id,
+      role: user.role,
+      companyId,
+      adminPermissions: user.adminPermissions,
+    });
+  }
+
   return user;
 }

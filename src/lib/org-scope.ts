@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import {
   ADMIN_PERMISSIONS,
+  COMPANY_WIDE_ADMIN_PERMISSIONS,
   DEFAULT_ADMIN_SCOPE_PERMISSIONS,
   hasAdminPermission,
   type SessionUser,
@@ -53,6 +54,53 @@ export async function ensureCompanyRootOrgUnit(
     },
     select: { id: true },
   });
+}
+
+/** Founding / unassigned company admins were seeing an empty tree because
+ *  scope filtered to zero units. Place them on the company root so the
+ *  hierarchy is visible and they can add units. */
+export async function placeUnassignedAdminOnCompanyRoot(
+  user: SessionUser
+): Promise<void> {
+  if (user.role !== "COMPANY_ADMIN" || !user.companyId) return;
+
+  const [assignmentCount, dbUser] = await Promise.all([
+    db.orgUnitAssignment.count({ where: { userId: user.id } }),
+    db.user.findUnique({
+      where: { id: user.id },
+      select: { orgUnitId: true, adminPermissions: true },
+    }),
+  ]);
+
+  if (!dbUser) return;
+  if (assignmentCount > 0 || dbUser.orgUnitId) return;
+
+  const root = await ensureCompanyRootOrgUnit(user.companyId);
+  const permissions =
+    dbUser.adminPermissions.length > 0
+      ? dbUser.adminPermissions
+      : [...COMPANY_WIDE_ADMIN_PERMISSIONS];
+
+  await db.$transaction([
+    db.user.update({
+      where: { id: user.id },
+      data: {
+        orgUnitId: root.id,
+        ...(dbUser.adminPermissions.length === 0
+          ? { adminPermissions: [...COMPANY_WIDE_ADMIN_PERMISSIONS] }
+          : {}),
+      },
+    }),
+    db.orgUnitAssignment.upsert({
+      where: { orgUnitId_userId: { orgUnitId: root.id, userId: user.id } },
+      create: {
+        orgUnitId: root.id,
+        userId: user.id,
+        permissions,
+      },
+      update: {},
+    }),
+  ]);
 }
 
 export async function getDescendantUnitIds(
@@ -194,12 +242,16 @@ export async function resolveAdminScope(user: SessionUser): Promise<AdminScope |
   }
 
   if (assignedUnitIds.length === 0) {
+    const all = await db.orgUnit.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true },
+    });
     return {
       companyId: user.companyId,
-      unitIds: [],
+      unitIds: all.map((u) => u.id),
       assignedUnitIds: [],
       permissions: [...permissions],
-      isCompanyWide: false,
+      isCompanyWide: true,
     };
   }
 

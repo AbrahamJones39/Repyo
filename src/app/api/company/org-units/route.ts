@@ -10,6 +10,7 @@ import {
   canManageOrgStructure,
   ensureCompanyRootOrgUnit,
   flattenOrgUnits,
+  placeUnassignedAdminOnCompanyRoot,
   resolveAdminScope,
   scopeHasPermission,
   unitInScope,
@@ -30,6 +31,7 @@ export async function GET() {
   }
 
   await ensureCompanyRootOrgUnit(scope.companyId);
+  await placeUnassignedAdminOnCompanyRoot(user);
   const refreshedScope = (await resolveAdminScope(user)) ?? scope;
 
   const units = await db.orgUnit.findMany({
