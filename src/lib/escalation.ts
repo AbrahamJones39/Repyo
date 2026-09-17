@@ -109,7 +109,7 @@ export async function escalateMissedRequests(limit = 50): Promise<number> {
       companyId: request.companyId,
       targetUserId: manager.id,
       metadata: {
-        missedByUserId,
+        missedByUserId: missedUserId,
         previousRepId: request.assignedRepId,
         managerRole: manager.role,
       },
