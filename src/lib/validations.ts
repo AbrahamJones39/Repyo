@@ -219,6 +219,8 @@ export const createRepSchema = z.object({
   email: z.string().email("Valid email required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   phone: z.string().optional(),
+  managerId: z.string().uuid("Designated manager is required"),
+  orgUnitId: z.string().uuid().optional(),
   credentialStatus: z
     .enum(["ACTIVE", "PENDING", "EXPIRED", "REVOKED"])
     .default("ACTIVE"),
@@ -226,6 +228,32 @@ export const createRepSchema = z.object({
     .enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"])
     .default("AVAILABLE"),
   products: z.array(z.string()).default([]),
+});
+
+export const createOrgUnitSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  typeLabel: z.string().min(1).max(60).default("Unit"),
+  parentId: z.string().uuid().nullable().optional(),
+});
+
+export const updateOrgUnitSchema = z.object({
+  name: z.string().min(1).optional(),
+  typeLabel: z.string().min(1).max(60).optional(),
+  parentId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export const orgUnitAssignmentSchema = z.object({
+  userId: z.string().uuid(),
+  permissions: z.array(z.string()).optional(),
+  typeLabel: z.string().min(1).max(60).optional(),
+  managerId: z.string().uuid().nullable().optional(),
+});
+
+export const updateMemberScopeSchema = z.object({
+  managerId: z.string().uuid().nullable().optional(),
+  orgUnitId: z.string().uuid().nullable().optional(),
+  permissions: z.array(z.string()).optional(),
 });
 
 export const createCompanySchema = z.object({

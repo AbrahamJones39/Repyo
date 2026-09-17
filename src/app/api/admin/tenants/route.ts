@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ensureCompanyRootOrgUnit } from "@/lib/org-scope";
 import { createCompanySchema, updateCompanySchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
       products: parsed.data.products,
     },
   });
+
+  await ensureCompanyRootOrgUnit(company.id, company.name);
 
   return NextResponse.json(company, { status: 201 });
 }

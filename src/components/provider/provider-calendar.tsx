@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { fetchJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -14,6 +15,7 @@ import {
   isSameDay,
   isSameMonth,
   startOfMonth,
+  subDays,
   subMonths,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -23,6 +25,11 @@ import {
   calendarEventChipClass,
   type CalendarRequestPreview,
 } from "@/components/shared/calendar-event-modal";
+import {
+  CalendarDayView,
+  CalendarViewToggle,
+  type CalendarViewMode,
+} from "@/components/shared/calendar-day-view";
 
 interface CalendarRequest {
   id: string;
@@ -45,6 +52,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function ProviderCalendarPage({ userName }: { userName: string }) {
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [requests, setRequests] = useState<CalendarRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -111,17 +119,32 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
             Your scheduled rep requests and case coverage
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setViewDate(subMonths(viewDate, 1))}>
+        <div className="flex flex-wrap items-center gap-2">
+          <CalendarViewToggle view={viewMode} onChange={setViewMode} />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setViewDate(viewMode === "day" ? subDays(viewDate, 1) : subMonths(viewDate, 1))
+            }
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[140px] text-center font-medium text-slate-900">
-            {format(viewDate, "MMMM yyyy")}
+          <span className="min-w-[180px] text-center font-medium text-slate-900">
+            {viewMode === "day"
+              ? format(viewDate, "EEEE, MMM d, yyyy")
+              : format(viewDate, "MMMM yyyy")}
           </span>
           <Button variant="secondary" size="sm" onClick={() => setViewDate(new Date())}>
             Today
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => setViewDate(addMonths(viewDate, 1))}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setViewDate(viewMode === "day" ? addDays(viewDate, 1) : addMonths(viewDate, 1))
+            }
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -147,71 +170,95 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d}>{d}</div>
-          ))}
-        </div>
-
-        {loading ? (
-          <p className="py-12 text-center text-slate-500">Loading calendar...</p>
+        {viewMode === "day" ? (
+          <CalendarDayView
+            date={viewDate}
+            loading={loading}
+            events={(requestsByDay.get(format(viewDate, "yyyy-MM-dd")) ?? []).map((req) => ({
+              id: req.id,
+              title: req.facilityName,
+              subtitle: req.assignedRep?.name ?? req.companyName,
+              startAt: req.scheduledAt,
+              className: STATUS_COLORS[req.status] ?? "bg-slate-100 text-slate-700 border-slate-200",
+              onClick: () => setSelectedRequest(req),
+            }))}
+          />
         ) : (
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: padding }).map((_, i) => (
-              <div key={`pad-${i}`} className="min-h-[100px] rounded-lg bg-slate-50/50" />
-            ))}
-            {days.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const dayRequests = requestsByDay.get(key) ?? [];
-              const isToday = isSameDay(day, new Date());
+          <>
+            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <div key={d}>{d}</div>
+              ))}
+            </div>
 
-              return (
-                <div
-                  key={key}
-                  className={cn(
-                    "min-h-[100px] rounded-lg border p-1.5",
-                    isSameMonth(day, viewDate)
-                      ? "border-slate-100 bg-white"
-                      : "border-transparent bg-slate-50 text-slate-400",
-                    isToday && "ring-2 ring-rose-300"
-                  )}
-                >
-                  <div className="mb-1 text-xs font-medium text-slate-700">
-                    {format(day, "d")}
-                  </div>
-                  <div className="space-y-1">
-                    {dayRequests.slice(0, 3).map((req) => (
+            {loading ? (
+              <p className="py-12 text-center text-slate-500">Loading calendar...</p>
+            ) : (
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: padding }).map((_, i) => (
+                  <div key={`pad-${i}`} className="min-h-[100px] rounded-lg bg-slate-50/50" />
+                ))}
+                {days.map((day) => {
+                  const key = format(day, "yyyy-MM-dd");
+                  const dayRequests = requestsByDay.get(key) ?? [];
+                  const isToday = isSameDay(day, new Date());
+
+                  return (
+                    <div
+                      key={key}
+                      className={cn(
+                        "min-h-[100px] rounded-lg border p-1.5",
+                        isSameMonth(day, viewDate)
+                          ? "border-slate-100 bg-white"
+                          : "border-transparent bg-slate-50 text-slate-400",
+                        isToday && "ring-2 ring-rose-300"
+                      )}
+                    >
                       <button
-                        key={req.id}
                         type="button"
-                        onClick={() => setSelectedRequest(req)}
-                        className={cn(
-                          calendarEventChipClass,
-                          "block w-full text-left",
-                          STATUS_COLORS[req.status] ??
-                            "bg-slate-100 text-slate-700 border-slate-200"
+                        onClick={() => {
+                          setViewDate(day);
+                          setViewMode("day");
+                        }}
+                        className="mb-1 text-xs font-medium text-slate-700 hover:text-rose-700 hover:underline"
+                      >
+                        {format(day, "d")}
+                      </button>
+                      <div className="space-y-1">
+                        {dayRequests.slice(0, 3).map((req) => (
+                          <button
+                            key={req.id}
+                            type="button"
+                            onClick={() => setSelectedRequest(req)}
+                            className={cn(
+                              calendarEventChipClass,
+                              "block w-full text-left",
+                              STATUS_COLORS[req.status] ??
+                                "bg-slate-100 text-slate-700 border-slate-200"
+                            )}
+                            title={`${req.facilityName}${req.assignedRep ? ` — ${req.assignedRep.name}` : ""}`}
+                          >
+                            {format(new Date(req.scheduledAt), "h:mm a")} {req.facilityName}
+                          </button>
+                        ))}
+                        {dayRequests.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOverflowDay({ date: day, requests: dayRequests })
+                            }
+                            className="text-[10px] text-slate-500 hover:text-slate-800 hover:underline"
+                          >
+                            +{dayRequests.length - 3} more
+                          </button>
                         )}
-                        title={`${req.facilityName}${req.assignedRep ? ` — ${req.assignedRep.name}` : ""}`}
-                      >
-                        {format(new Date(req.scheduledAt), "h:mm a")} {req.facilityName}
-                      </button>
-                    ))}
-                    {dayRequests.length > 3 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOverflowDay({ date: day, requests: dayRequests })
-                        }
-                        className="text-[10px] text-slate-500 hover:text-slate-800 hover:underline"
-                      >
-                        +{dayRequests.length - 3} more
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 

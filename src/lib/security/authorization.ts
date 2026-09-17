@@ -20,9 +20,42 @@ export const ADMIN_PERMISSIONS = {
   VIEW_CALENDAR: "VIEW_CALENDAR",
   MANAGE_TEAMS: "MANAGE_TEAMS",
   VIEW_TEAM_CALENDAR: "VIEW_TEAM_CALENDAR",
+  VIEW_METRICS: "VIEW_METRICS",
+  MANAGE_ORG_UNITS: "MANAGE_ORG_UNITS",
   MANAGE_INTEGRATIONS: "MANAGE_INTEGRATIONS",
   MANAGE_TERRITORY: "MANAGE_TERRITORY",
 } as const;
+
+/** Suggested org-unit type labels — never enforced as an enum. */
+export const ORG_UNIT_TYPE_SUGGESTIONS = [
+  "Rep",
+  "Team Lead",
+  "Senior Rep",
+  "Field Rep",
+  "Sales Lead",
+  "Sales Manager",
+  "Territory Manager",
+  "District Manager",
+  "President",
+  "Admin",
+] as const;
+
+export const CUSTOM_ORG_UNIT_TYPE_VALUE = "__custom__";
+
+export const DEFAULT_ADMIN_SCOPE_PERMISSIONS = [
+  ADMIN_PERMISSIONS.VIEW_METRICS,
+  ADMIN_PERMISSIONS.VIEW_CALENDAR,
+  ADMIN_PERMISSIONS.VIEW_TEAM_CALENDAR,
+  ADMIN_PERMISSIONS.MANAGE_REQUESTS,
+] as const;
+
+export const COMPANY_WIDE_ADMIN_PERMISSIONS = [
+  ...DEFAULT_ADMIN_SCOPE_PERMISSIONS,
+  ADMIN_PERMISSIONS.MANAGE_REPS,
+  ADMIN_PERMISSIONS.MANAGE_TEAMS,
+  ADMIN_PERMISSIONS.MANAGE_ORG_UNITS,
+  ADMIN_PERMISSIONS.MANAGE_TERRITORY,
+] as const;
 
 export const SECURITY_PERMISSIONS = {
   SECURITY_KILL_SWITCH: "SECURITY_KILL_SWITCH",
@@ -147,8 +180,9 @@ export function canAccessRequestRecord(
     assignedAdminId: string | null;
     initiatedByRepId: string | null;
     companyId: string;
+    escalatedToId?: string | null;
   },
-  options?: { delegatedAdminIds?: string[] }
+  options?: { delegatedAdminIds?: string[]; scopedRepIds?: string[] }
 ): boolean {
   if (user.role === "SUPER_ADMIN") return true;
   if (user.role === "PROVIDER" && request.providerId === user.id) return true;
@@ -165,7 +199,14 @@ export function canAccessRequestRecord(
   if (user.role === "COMPANY_ADMIN") {
     if (user.companyId !== request.companyId) return false;
     if (request.assignedAdminId === user.id) return true;
-    return hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_REQUESTS);
+    if (request.escalatedToId === user.id) return true;
+    if (
+      request.assignedRepId &&
+      options?.scopedRepIds?.includes(request.assignedRepId)
+    ) {
+      return true;
+    }
+    return false;
   }
   return false;
 }

@@ -67,6 +67,28 @@ export async function completeSignup(params: {
     organizationName = org?.name ?? null;
   }
 
+  let invitationManagerId: string | null = null;
+  let invitationOrgUnitId: string | null = null;
+  if (inviteToken?.trim()) {
+    const pendingInvite = await db.platformInvitation.findFirst({
+      where: { token: inviteToken.trim(), status: "PENDING" },
+      select: { managerId: true, orgUnitId: true, targetRole: true },
+    });
+    invitationManagerId = pendingInvite?.managerId ?? null;
+    invitationOrgUnitId = pendingInvite?.orgUnitId ?? null;
+  }
+
+  if (role === "REP") {
+    if (!companyId) {
+      throw new Error("Rep accounts must belong to a company");
+    }
+    const { requireRepManager } = await import("@/lib/org-scope");
+    invitationManagerId = await requireRepManager({
+      managerId: invitationManagerId,
+      companyId,
+    });
+  }
+
   const user = await db.user.create({
     data: {
       name: name.trim(),
@@ -75,6 +97,8 @@ export async function completeSignup(params: {
       role,
       emailVerifiedAt: new Date(),
       companyId: companyId ?? null,
+      managerId: invitationManagerId,
+      orgUnitId: invitationOrgUnitId,
       ...(role === "COMPANY_ADMIN" && {
         zipCodeStart: zipCodeStart?.trim().slice(0, 5) ?? null,
         zipCodeEnd: zipCodeEnd?.trim().slice(0, 5) ?? null,
@@ -226,6 +250,16 @@ export async function completeSignup(params: {
         await applyInvitationPreconfig(user.id, pending);
       }
     }
+  }
+
+  if (role === "COMPANY_ADMIN" && companyId) {
+    const { placeUnassignedAdminOnCompanyRoot } = await import("@/lib/org-scope");
+    await placeUnassignedAdminOnCompanyRoot({
+      id: user.id,
+      role: user.role,
+      companyId,
+      adminPermissions: user.adminPermissions,
+    });
   }
 
   return user;

@@ -53,6 +53,9 @@ const nextAuth = NextAuth({
         token.sessionVersion = user.sessionVersion ?? 0;
         token.accountState = user.accountState ?? "REGISTERED";
         token.adminPermissions = user.adminPermissions ?? [];
+        delete token.error;
+        // Fresh sign-in for any role — don't inherit a prior SessionRevoked cookie.
+        return token;
       }
 
       if (token.id) {
@@ -72,11 +75,14 @@ const nextAuth = NextAuth({
           return token;
         }
 
-        if (token.sessionVersion !== dbUser.sessionVersion) {
+        const tokenVersion = token.sessionVersion ?? 0;
+        if (tokenVersion !== dbUser.sessionVersion) {
           token.error = "SessionRevoked";
           return token;
         }
 
+        delete token.error;
+        token.sessionVersion = dbUser.sessionVersion;
         token.role = dbUser.role;
         token.companyId = dbUser.companyId;
         token.accountState = dbUser.accountState;

@@ -79,6 +79,7 @@ enum RoutingEventType {
   REP_ACCEPTED
   PHI_ACCESSED
   REQUEST_REROUTED
+  ESCALATED_TO_MANAGER
   KILL_SWITCH_APPLIED
 }
 
@@ -98,6 +99,8 @@ enum PermissionChangeType {
   USER_VERIFICATION_DECISION
   CALENDAR_VISIBILITY_CHANGED
   TEAM_MEMBERSHIP_CHANGED
+  ORG_UNIT_CHANGED
+  MANAGER_CHANGED
   TERRITORY_CHANGED
   DELEGATION_CHANGED
   ACCOUNT_STATE_CHANGED
@@ -184,6 +187,8 @@ model User {
   name             String
   phone            String?
   companyId        String?
+  managerId        String?
+  orgUnitId        String?
   zipCodeStart     String?
   zipCodeEnd       String?
   delegatedRepId   String?
@@ -200,6 +205,10 @@ model User {
   disableReason    String?
   lastSessionRevokedAt DateTime?
   company          Company?         @relation(fields: [companyId], references: [id])
+  manager          User?            @relation("ReportingLine", fields: [managerId], references: [id])
+  directReports    User[]           @relation("ReportingLine")
+  homeOrgUnit      OrgUnit?         @relation("UserHomeOrgUnit", fields: [orgUnitId], references: [id])
+  orgAssignments   OrgUnitAssignment[]
   delegatedRep     User?            @relation("AdminDelegation", fields: [delegatedRepId], references: [id])
   delegatingAdmins User[]           @relation("AdminDelegation")
   repProfile       RepProfile?
@@ -230,11 +239,13 @@ model User {
   invitationsSent         PlatformInvitation[] @relation("InvitationSender")
   invitationsRevoked      PlatformInvitation[] @relation("InvitationRevoker")
   invitationsAccepted     PlatformInvitation[] @relation("InvitationAccepter")
+  invitationsAsManager    PlatformInvitation[] @relation("InvitationDesignatedManager")
   providerSiteMemberships ProviderSiteMembership[]
   repSiteCoverages        RepSiteCoverage[]
   healthcareSitesCreated  HealthcareSite[]         @relation("SiteCreator")
   managedTeams            CompanyTeam[]            @relation("TeamManager")
   teamMemberships         CompanyTeamMember[]
+  requestsEscalatedTo     ServiceRequest[]     @relation("EscalatedToManager")
   forwardsSent            RequestForward[]         @relation("ForwardSender")
   forwardsReceived        RequestForward[]         @relation("ForwardRecipient")
   forwardsAsOriginal      RequestForward[]         @relation("ForwardOriginalRep")
@@ -276,6 +287,7 @@ model Company {
   rosterEntries       PreapprovedRosterEntry[]
   invitations         PlatformInvitation[]
   teams               CompanyTeam[]
+  orgUnits            OrgUnit[]
 }
 
 model Facility {
@@ -572,9 +584,48 @@ model Territory {
   @@index([state, county, zipCode])
 }
 
+model OrgUnit {
+  id        String   @id @default(uuid())
+  companyId String
+  parentId  String?
+  name      String
+  /// Free-form label (Company, Division, Region, Area, Territory, Team, etc.).
+  /// Not an enum so manufacturers can name their own ladder.
+  typeLabel String   @default("Unit")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent      OrgUnit?             @relation("OrgUnitHierarchy", fields: [parentId], references: [id])
+  children    OrgUnit[]            @relation("OrgUnitHierarchy")
+  members     User[]               @relation("UserHomeOrgUnit")
+  assignments OrgUnitAssignment[]
+  teams       CompanyTeam[]
+  invitations PlatformInvitation[]
+
+  @@index([companyId, parentId])
+}
+
+model OrgUnitAssignment {
+  id          String   @id @default(uuid())
+  orgUnitId   String
+  userId      String
+  /// Operational permissions for this unit and its descendants. Never grants PHI.
+  permissions String[] @default([])
+  createdAt   DateTime @default(now())
+
+  orgUnit OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgUnitId, userId])
+  @@index([userId])
+}
+
 model CompanyTeam {
   id                        String                 @id @default(uuid())
   companyId                 String
+  orgUnitId                 String?
   name                      String
   managerUserId             String
   defaultCalendarVisibility TeamCalendarVisibility @default(SHARED_WITH_TEAM)
@@ -583,6 +634,7 @@ model CompanyTeam {
   updatedAt                 DateTime               @updatedAt
 
   company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orgUnit     OrgUnit?            @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   manager     User                @relation("TeamManager", fields: [managerUserId], references: [id])
   members     CompanyTeamMember[]
   assignments ServiceRequest[]
@@ -613,6 +665,10 @@ model ServiceRequest {
   companyId            String
   assignedAdminId      String?
   assignedRepId        String?
+  assignedAt           DateTime?
+  escalatedAt          DateTime?
+  escalatedToId        String?
+  missedByRepId        String?
   healthcareSiteId     String?
   teamId               String?
   teamCalendarVisibility TeamCalendarVisibility @default(SHARED_WITH_TEAM)
@@ -668,6 +724,7 @@ model ServiceRequest {
   assignedAdmin  User?    @relation("AdminRequests", fields: [assignedAdminId], references: [id])
   company        Company  @relation(fields: [companyId], references: [id])
   assignedRep    User?    @relation("AssignedRepRequests", fields: [assignedRepId], references: [id])
+  escalatedTo    User?    @relation("EscalatedToManager", fields: [escalatedToId], references: [id])
   originalRep    User?    @relation("OriginalRepRequests", fields: [originalRepId], references: [id])
   acknowledgedBy User?    @relation("AcknowledgedRequests", fields: [acknowledgedById], references: [id])
   healthcareSite HealthcareSite? @relation(fields: [healthcareSiteId], references: [id])
@@ -681,6 +738,7 @@ model ServiceRequest {
   @@index([initiatedByRepId])
   @@index([assignedAdminId])
   @@index([assignedRepId])
+  @@index([escalatedToId])
   @@index([status])
   @@index([companyId])
 }
@@ -942,6 +1000,8 @@ model PlatformInvitation {
   organizationId     String?
   companyId          String?
   teamId             String?
+  orgUnitId          String?
+  managerId          String?
   healthcareSiteId   String?
   facilityId         String?
   territoryContext   Json?
@@ -959,6 +1019,8 @@ model PlatformInvitation {
   organization   ProviderOrganization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   company        Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team           CompanyTeam?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  orgUnit        OrgUnit?              @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  designatedManager User?              @relation("InvitationDesignatedManager", fields: [managerId], references: [id], onDelete: SetNull)
   healthcareSite HealthcareSite?       @relation(fields: [healthcareSiteId], references: [id], onDelete: SetNull)
 
   @@index([inviteeEmail, status])

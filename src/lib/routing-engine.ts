@@ -330,6 +330,7 @@ export async function assignRepToRequest(
         etaMinutes,
         repLat,
         repLng,
+        assignedAt: new Date(),
         acknowledgedAt: null,
         acknowledgedById: null,
         alertActive: true,

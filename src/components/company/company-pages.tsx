@@ -15,6 +15,8 @@ interface Rep {
   name: string;
   email: string;
   phone: string | null;
+  manager?: { id: string; name: string; role: string } | null;
+  homeOrgUnit?: { id: string; name: string; typeLabel: string } | null;
   repProfile: {
     status: string;
     credentialStatus: string;
@@ -303,6 +305,8 @@ export function CompanyRepsPage({
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <th className="px-4 py-3">Rep</th>
+                <th className="px-4 py-3">Manager</th>
+                <th className="px-4 py-3">Unit</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Qualified</th>
                 <th className="px-4 py-3">Territories</th>
@@ -312,7 +316,7 @@ export function CompanyRepsPage({
             <tbody>
               {reps.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">No reps found</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">No reps found</td>
                 </tr>
               ) : (
                 reps.map((rep) => (
@@ -320,6 +324,12 @@ export function CompanyRepsPage({
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">{rep.name}</p>
                       <p className="text-xs text-slate-500">{rep.email}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {rep.manager?.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">
+                      {rep.homeOrgUnit?.name ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       {rep.repProfile && (
@@ -385,6 +395,25 @@ function AddRepModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [managers, setManagers] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [units, setUnits] = useState<{ id: string; name: string; typeLabel: string; depth: number }[]>(
+    []
+  );
+
+  useEffect(() => {
+    fetchJson<{
+      people: { id: string; name: string; role: string }[];
+      flat: { id: string; name: string; typeLabel: string; depth: number }[];
+    }>("/api/company/org-units")
+      .then((data) => {
+        setManagers(data.people ?? []);
+        setUnits(data.flat ?? []);
+      })
+      .catch(() => {
+        setManagers([]);
+        setUnits([]);
+      });
+  }, []);
 
   function toggleProduct(product: string) {
     setSelectedProducts((prev) =>
@@ -408,6 +437,8 @@ function AddRepModal({
           email: form.get("email"),
           password: form.get("password"),
           phone: form.get("phone") || undefined,
+          managerId: form.get("managerId"),
+          orgUnitId: form.get("orgUnitId") || undefined,
           credentialStatus: form.get("credentialStatus"),
           status: form.get("status"),
           products: selectedProducts,
@@ -453,6 +484,35 @@ function AddRepModal({
           <p className="-mt-2 text-xs text-slate-500">
             Share this password with the rep so they can sign in at /login.
           </p>
+
+          <Select
+            label="Designated manager"
+            name="managerId"
+            required
+            options={[
+              { value: "", label: "Select manager..." },
+              ...managers.map((m) => ({
+                value: m.id,
+                label: `${m.name} (${m.role === "REP" ? "Rep" : "Admin"})`,
+              })),
+            ]}
+          />
+          <p className="-mt-2 text-xs text-slate-500">
+            Required. Missed requests escalate to this manager.
+          </p>
+          {units.length > 0 && (
+            <Select
+              label="Organizational unit"
+              name="orgUnitId"
+              options={[
+                { value: "", label: "None" },
+                ...units.map((u) => ({
+                  value: u.id,
+                  label: `${"— ".repeat(u.depth)}${u.name} (${u.typeLabel})`,
+                })),
+              ]}
+            />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
@@ -516,11 +576,13 @@ function AddRepModal({
 }
 
 interface Analytics {
-  totals: { all: number; active: number; completed: number; cancelled: number };
+  totals: { all: number; active: number; completed: number; cancelled: number; escalated?: number };
   avgResponseMinutes: number | null;
   byProcedure: { name: string; count: number }[];
   byUrgency: { name: string; count: number }[];
   coverage: { totalReps: number; availableReps: number; credentialedReps: number };
+  phiIncluded?: boolean;
+  scope?: { isCompanyWide: boolean };
 }
 
 export function CompanyAnalyticsPage({ userName }: { userName: string }) {
@@ -552,13 +614,17 @@ export function CompanyAnalyticsPage({ userName }: { userName: string }) {
   return (
     <PortalShell portal="company" userName={userName}>
       <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-      <p className="mt-1 text-sm text-slate-600">Operations performance overview</p>
+      <p className="mt-1 text-sm text-slate-600">
+        Operational metrics for your unit and everyone below you. Patient information is not included.
+        {data.scope && !data.scope.isCompanyWide ? " Scoped to your assigned organization units." : ""}
+      </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[
           { label: "Total Cases", value: data.totals.all },
           { label: "Active", value: data.totals.active },
           { label: "Completed", value: data.totals.completed },
+          { label: "Escalated", value: data.totals.escalated ?? 0 },
           { label: "Avg Response", value: data.avgResponseMinutes != null ? `${data.avgResponseMinutes}m` : "—" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5">

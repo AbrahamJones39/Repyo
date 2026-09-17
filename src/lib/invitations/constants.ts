@@ -25,8 +25,11 @@ export function buildInviteUrl(token: string, baseUrl?: string): string {
 export type InvitationPreconfig = {
   organizationId?: string;
   companyId?: string;
-  teamId?: string;
-  healthcareSiteId?: string;
+    teamId?: string;
+    orgUnitId?: string;
+    managerId?: string;
+    adminPermissions?: string[];
+    healthcareSiteId?: string;
   facilityId?: string;
   territoryContext?: { state?: string; county?: string; zipCode?: string };
   /** Does not grant PHI — verification policy still applies after signup. */

@@ -18,7 +18,7 @@ import {
 export default async function HomePage() {
   const session = await auth();
 
-  if (session?.user) {
+  if (session?.user?.role) {
     redirect(getDefaultRoute(session.user.role));
   }
 

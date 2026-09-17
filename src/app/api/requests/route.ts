@@ -53,9 +53,25 @@ export async function GET() {
         ],
       };
     } else if (session.user.role === "COMPANY_ADMIN") {
+      const { getScopedRepIds, resolveAdminScope } = await import("@/lib/org-scope");
+      const user = toSessionUser({
+        id: session.user.id,
+        role: session.user.role,
+        companyId: session.user.companyId,
+        accountState: session.user.accountState,
+        adminPermissions: session.user.adminPermissions,
+      });
+      const scope = await resolveAdminScope(user);
+      const scopedRepIds = await getScopedRepIds(user, scope);
       where = {
         companyId: session.user.companyId ?? undefined,
-        assignedAdminId: session.user.id,
+        OR: [
+          { assignedAdminId: session.user.id },
+          { escalatedToId: session.user.id },
+          ...(scopedRepIds.length > 0
+            ? [{ assignedRepId: { in: scopedRepIds } }]
+            : []),
+        ],
       };
     }
 
@@ -84,9 +100,14 @@ export async function GET() {
     const delegatedAdminIds =
       user.role === "REP" ? await getDelegatedAdminIdsForRep(user.id) : [];
 
+    const scopedRepIds =
+      user.role === "COMPANY_ADMIN"
+        ? await (await import("@/lib/org-scope")).getScopedRepIds(user)
+        : [];
+
     const sanitized = requests
       .filter((r) =>
-        canAccessRequestRecord(user, r, { delegatedAdminIds })
+        canAccessRequestRecord(user, r, { delegatedAdminIds, scopedRepIds })
       )
       .map((r) => {
         const isDelegatedAdmin =

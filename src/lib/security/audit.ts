@@ -98,4 +98,8 @@ export const GENERIC_NOTIFICATION = {
     title: "Rep has seen assignment",
     body: "An assigned rep opened a request you routed. Open GoRepYo to view details.",
   },
+  escalated: {
+    title: "Request escalated to you",
+    body: "A request was missed and routed to you as the designated manager. Open GoRepYo to reassign or respond.",
+  },
 } as const;

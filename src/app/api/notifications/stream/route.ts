@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { realtimeBus } from "@/lib/routing-engine";
+import { escalateMissedRequests } from "@/lib/escalation";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -20,11 +21,14 @@ export async function GET(request: Request) {
 
       send({ type: "connected", userId });
 
+      void escalateMissedRequests().catch(() => undefined);
+
       const unsubUser = realtimeBus.subscribe(`user:${userId}`, send);
       const unsubGlobal = realtimeBus.subscribe("request:updated", send);
 
       const heartbeat = setInterval(() => {
         controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        void escalateMissedRequests().catch(() => undefined);
       }, 30000);
 
       const cleanup = () => {

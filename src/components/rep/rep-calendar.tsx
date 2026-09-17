@@ -8,6 +8,7 @@ import { fetchJson } from "@/lib/api-client";
 import { dayName } from "@/lib/rep-availability";
 import { cn } from "@/lib/utils";
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -15,6 +16,7 @@ import {
   isSameDay,
   isSameMonth,
   startOfMonth,
+  subDays,
   subMonths,
 } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
@@ -25,6 +27,11 @@ import {
   type CalendarBlockPreview,
   type CalendarRequestPreview,
 } from "@/components/shared/calendar-event-modal";
+import {
+  CalendarDayView,
+  CalendarViewToggle,
+  type CalendarViewMode,
+} from "@/components/shared/calendar-day-view";
 
 interface ScheduleRule {
   dayOfWeek: number;
@@ -59,6 +66,7 @@ const DEFAULT_RULES: ScheduleRule[] = [1, 2, 3, 4, 5].map((day) => ({
 
 export function RepCalendarPage({ userName }: { userName: string }) {
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [rules, setRules] = useState<ScheduleRule[]>(DEFAULT_RULES);
   const [blocks, setBlocks] = useState<AvailabilityBlock[]>([]);
   const [requests, setRequests] = useState<CalendarRequest[]>([]);
@@ -213,6 +221,12 @@ export function RepCalendarPage({ userName }: { userName: string }) {
     return dayRules.length > 0;
   }
 
+  const selectedDayKey = format(viewDate, "yyyy-MM-dd");
+  const selectedDayBlocks = blocksByDay.get(selectedDayKey) ?? [];
+  const selectedDayRequests = requestsByDay.get(selectedDayKey) ?? [];
+  const selectedDayRules = rules.filter((r) => r.dayOfWeek === viewDate.getDay());
+  const selectedDayOnVacation = selectedDayBlocks.some((b) => b.type === "VACATION");
+
   return (
     <PortalShell portal="rep" userName={userName}>
       <div className="mb-6">
@@ -235,12 +249,21 @@ export function RepCalendarPage({ userName }: { userName: string }) {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-900">{format(viewDate, "MMMM yyyy")}</h2>
-              <div className="flex gap-1">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold text-slate-900">
+                {viewMode === "day"
+                  ? format(viewDate, "EEEE, MMM d, yyyy")
+                  : format(viewDate, "MMMM yyyy")}
+              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <CalendarViewToggle view={viewMode} onChange={setViewMode} />
                 <button
                   type="button"
-                  onClick={() => setViewDate(subMonths(viewDate, 1))}
+                  onClick={() =>
+                    setViewDate(
+                      viewMode === "day" ? subDays(viewDate, 1) : subMonths(viewDate, 1)
+                    )
+                  }
                   className="rounded-lg p-2 hover:bg-slate-100"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -254,7 +277,11 @@ export function RepCalendarPage({ userName }: { userName: string }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewDate(addMonths(viewDate, 1))}
+                  onClick={() =>
+                    setViewDate(
+                      viewMode === "day" ? addDays(viewDate, 1) : addMonths(viewDate, 1)
+                    )
+                  }
                   className="rounded-lg p-2 hover:bg-slate-100"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -262,6 +289,51 @@ export function RepCalendarPage({ userName }: { userName: string }) {
               </div>
             </div>
 
+            {viewMode === "day" ? (
+              <>
+                <p className="mb-3 text-xs text-slate-500">
+                  {selectedDayOnVacation
+                    ? "Time off — not available for requests"
+                    : selectedDayRules.length > 0
+                      ? `Available ${selectedDayRules.map((r) => `${r.startTime}–${r.endTime}`).join(", ")}`
+                      : "No weekly hours set for this day"}
+                </p>
+                <CalendarDayView
+                  date={viewDate}
+                  loading={loading}
+                  events={[
+                    ...selectedDayBlocks
+                      .filter((b) => b.type === "VACATION")
+                      .map((block) => ({
+                        id: block.id,
+                        title: "Vacation",
+                        subtitle: block.note ?? undefined,
+                        startAt: block.startAt,
+                        endAt: block.endAt,
+                        allDay: true,
+                        className: "border-red-200 bg-red-50 text-red-700",
+                        onClick: () =>
+                          setSelectedBlock({
+                            id: block.id,
+                            type: block.type,
+                            startAt: block.startAt,
+                            endAt: block.endAt,
+                            note: block.note,
+                          }),
+                      })),
+                    ...selectedDayRequests.map((r) => ({
+                      id: r.id,
+                      title: r.facilityName,
+                      subtitle: r.procedureType ?? undefined,
+                      startAt: r.scheduledAt,
+                      className: "border-blue-200 bg-blue-100 text-blue-800",
+                      onClick: () => setSelectedRequest(r),
+                    })),
+                  ]}
+                />
+              </>
+            ) : (
+              <>
             <div className="mb-2 grid grid-cols-7 gap-1">
               {WEEKDAYS.map((d) => (
                 <div key={d} className="py-1 text-center text-xs font-medium text-slate-500">
@@ -294,14 +366,19 @@ export function RepCalendarPage({ userName }: { userName: string }) {
                         !onVacation && hasHours && inMonth && "bg-emerald-50/60"
                       )}
                     >
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewDate(day);
+                          setViewMode("day");
+                        }}
                         className={cn(
-                          "font-medium",
+                          "font-medium hover:underline",
                           inMonth ? "text-slate-900" : "text-slate-400"
                         )}
                       >
                         {format(day, "d")}
-                      </span>
+                      </button>
                       {dayRequests.slice(0, 2).map((r) => (
                         <button
                           key={r.id}
@@ -379,6 +456,8 @@ export function RepCalendarPage({ userName }: { userName: string }) {
                 Assigned case
               </span>
             </div>
+              </>
+            )}
           </div>
         </div>
 

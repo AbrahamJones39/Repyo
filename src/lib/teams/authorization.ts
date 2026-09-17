@@ -35,15 +35,27 @@ export async function getManagedTeamIds(user: TeamScopeUser): Promise<string[]> 
 
   if (managed.length > 0) return managed.map((t) => t.id);
 
-  if (
-    user.role === "COMPANY_ADMIN" &&
-    hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_TEAMS)
-  ) {
-    const teams = await db.companyTeam.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true },
-    });
-    return teams.map((t) => t.id);
+  if (user.role === "COMPANY_ADMIN") {
+    const { resolveAdminScope } = await import("@/lib/org-scope");
+    const scope = await resolveAdminScope(user);
+    if (
+      scope &&
+      (hasAdminPermission(user, ADMIN_PERMISSIONS.MANAGE_TEAMS) ||
+        hasAdminPermission(user, ADMIN_PERMISSIONS.VIEW_TEAM_CALENDAR))
+    ) {
+      const teams = await db.companyTeam.findMany({
+        where: {
+          companyId: user.companyId,
+          ...(scope.isCompanyWide
+            ? {}
+            : scope.unitIds.length > 0
+              ? { orgUnitId: { in: scope.unitIds } }
+              : { id: { in: [] } }),
+        },
+        select: { id: true },
+      });
+      return teams.map((t) => t.id);
+    }
   }
 
   return [];

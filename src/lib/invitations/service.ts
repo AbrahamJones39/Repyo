@@ -23,6 +23,9 @@ export type CreateInvitationInput = {
   organizationId?: string | null;
   companyId?: string | null;
   teamId?: string | null;
+  orgUnitId?: string | null;
+  managerId?: string | null;
+  adminPermissions?: string[];
   healthcareSiteId?: string | null;
   facilityId?: string | null;
   territoryContext?: InvitationPreconfig["territoryContext"];
@@ -85,10 +88,13 @@ export async function createInvitation(input: CreateInvitationInput) {
     organizationId: input.organizationId ?? undefined,
     companyId: input.companyId ?? undefined,
     teamId: input.teamId ?? undefined,
+    orgUnitId: input.orgUnitId ?? undefined,
+    managerId: input.managerId ?? undefined,
     healthcareSiteId: input.healthcareSiteId ?? undefined,
     facilityId: input.facilityId ?? undefined,
     territoryContext: input.territoryContext,
     grantsPhiAccess: false,
+    adminPermissions: input.targetRole === "COMPANY_ADMIN" ? input.adminPermissions : undefined,
   };
 
   const invitation = await db.platformInvitation.create({
@@ -102,6 +108,8 @@ export async function createInvitation(input: CreateInvitationInput) {
       organizationId: input.organizationId ?? null,
       companyId: input.companyId ?? null,
       teamId: input.teamId ?? null,
+      orgUnitId: input.orgUnitId ?? null,
+      managerId: input.managerId ?? null,
       healthcareSiteId: input.healthcareSiteId ?? null,
       facilityId: input.facilityId ?? null,
       territoryContext: input.territoryContext as Prisma.InputJsonValue | undefined,
@@ -248,9 +256,49 @@ export async function applyInvitationPreconfig(
     teamId: string | null;
     healthcareSiteId: string | null;
     organizationId: string | null;
+    orgUnitId?: string | null;
+    managerId?: string | null;
     targetRole: Role;
+    preconfig?: unknown;
   }
 ) {
+  const preconfig = (invitation.preconfig ?? {}) as {
+    adminPermissions?: string[];
+  };
+
+  if (invitation.managerId || invitation.orgUnitId) {
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        ...(invitation.managerId ? { managerId: invitation.managerId } : {}),
+        ...(invitation.orgUnitId ? { orgUnitId: invitation.orgUnitId } : {}),
+      },
+    });
+  }
+
+  if (invitation.orgUnitId && invitation.targetRole === "COMPANY_ADMIN") {
+    const { DEFAULT_ADMIN_SCOPE_PERMISSIONS } = await import(
+      "@/lib/security/authorization"
+    );
+    await db.orgUnitAssignment.upsert({
+      where: {
+        orgUnitId_userId: { orgUnitId: invitation.orgUnitId, userId },
+      },
+      create: {
+        orgUnitId: invitation.orgUnitId,
+        userId,
+        permissions: preconfig.adminPermissions?.length
+          ? preconfig.adminPermissions
+          : [...DEFAULT_ADMIN_SCOPE_PERMISSIONS],
+      },
+      update: {
+        permissions: preconfig.adminPermissions?.length
+          ? preconfig.adminPermissions
+          : [...DEFAULT_ADMIN_SCOPE_PERMISSIONS],
+      },
+    });
+  }
+
   if (invitation.teamId && invitation.targetRole === "REP") {
     await db.companyTeamMember.upsert({
       where: { teamId_userId: { teamId: invitation.teamId, userId } },

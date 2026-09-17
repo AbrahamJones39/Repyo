@@ -9,6 +9,8 @@ import { CompanyVerificationPanel } from "@/components/company/company-verificat
 import { CompanyInviteButton } from "@/components/company/company-invite-button";
 import { redirect } from "next/navigation";
 import { Users, Clock, MapPin, Activity, ArrowRight } from "lucide-react";
+import { toSessionUser } from "@/lib/security/sanitize-request";
+import { getScopedRepIds, resolveAdminScope } from "@/lib/org-scope";
 
 export default async function CompanyPage() {
   const session = await auth();
@@ -19,10 +21,26 @@ export default async function CompanyPage() {
   const companyId = session.user.companyId;
   if (!companyId) redirect("/login");
 
+  const user = toSessionUser(session.user);
+  const scope = await resolveAdminScope(user);
+  const scopedRepIds = await getScopedRepIds(user, scope);
+  const repFilter = scope?.isCompanyWide
+    ? { companyId, role: "REP" as const }
+    : { companyId, role: "REP" as const, id: { in: scopedRepIds } };
+
+  const requestWhere = {
+    companyId,
+    OR: [
+      { assignedAdminId: session.user.id },
+      { escalatedToId: session.user.id },
+      ...(scopedRepIds.length > 0 ? [{ assignedRepId: { in: scopedRepIds } }] : []),
+    ],
+  };
+
   const [reps, requests, company] = await Promise.all([
-    db.user.count({ where: { companyId, role: "REP" } }),
+    db.user.count({ where: repFilter }),
     db.serviceRequest.findMany({
-      where: { companyId },
+      where: requestWhere,
       select: { status: true, createdAt: true },
     }),
     db.company.findUnique({ where: { id: companyId } }),
@@ -30,7 +48,7 @@ export default async function CompanyPage() {
 
   const activeReps = await db.repProfile.count({
     where: {
-      user: { companyId },
+      user: repFilter,
       status: "AVAILABLE",
       credentialStatus: "ACTIVE",
     },
@@ -53,7 +71,9 @@ export default async function CompanyPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{company?.name}</h1>
-          <p className="text-sm text-slate-600">Company Operations Overview</p>
+          <p className="text-sm text-slate-600">
+            Operational overview for your unit and reporting ladder. Patient information is not shown.
+          </p>
         </div>
         <CompanyInviteButton />
       </div>
