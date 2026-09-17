@@ -26,7 +26,7 @@ npm run db:push      # create tables
 npm run db:seed      # optional: demo accounts
 ```
 
-> Run `db:push` and `db:seed` locally against the production database before go-live, or use a CI job. Vercel builds do not run migrations automatically.
+> Run `db:push` and `db:seed` locally against the production database before go-live, or use a CI job. Production Vercel builds now run `prisma db push` so new columns (org units, session version, manager) are applied on deploy. Do **not** run `db:seed` in the Vercel build — it would reset demo data.
 
 ## 2. Generate secrets
 
