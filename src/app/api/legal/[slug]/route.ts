@@ -1,11 +1,14 @@
 import { db } from "@/lib/db";
 import { LEGAL_DOCUMENTS } from "@/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
 import { NextResponse } from "next/server";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
   const { slug } = await context.params;
+
+  await syncLegalDocumentsFromCode();
 
   const doc =
     (await db.legalDocument.findFirst({

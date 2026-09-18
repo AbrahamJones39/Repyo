@@ -8,8 +8,7 @@ import {
 } from "@/components/shared/facility-search-picker";
 import {
   LegalDocumentModal,
-  ProviderAgreementSection,
-  RepAgreementSection,
+  AccountAgreementSection,
 } from "@/components/legal/legal-document-modal";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -77,10 +76,9 @@ export function SignupForm() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [requestOrgAccess, setRequestOrgAccess] = useState(false);
-  const [acceptProviderAuthorization, setAcceptProviderAuthorization] =
+  const [acceptAuthorizedUse, setAcceptAuthorizedUse] = useState(false);
+  const [acceptPrivacyCommunications, setAcceptPrivacyCommunications] =
     useState(false);
-  const [acceptProviderPrivacy, setAcceptProviderPrivacy] = useState(false);
-  const [acceptTermsAndPrivacy, setAcceptTermsAndPrivacy] = useState(false);
   const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
@@ -198,7 +196,7 @@ export function SignupForm() {
       if (!values.requesterPhone?.trim()) return "Your phone number is required";
     }
     if (step === 4) {
-      if (!acceptProviderAuthorization || !acceptProviderPrivacy) {
+      if (!acceptAuthorizedUse || !acceptPrivacyCommunications) {
         return "You must accept all required agreements before creating your account";
       }
     }
@@ -234,10 +232,16 @@ export function SignupForm() {
     form.set("requestOrgAccess", requestOrgAccess ? "true" : "false");
     form.set(
       "acceptProviderAuthorization",
-      acceptProviderAuthorization ? "true" : "false"
+      acceptAuthorizedUse ? "true" : "false"
     );
-    form.set("acceptProviderPrivacy", acceptProviderPrivacy ? "true" : "false");
-    form.set("acceptTermsAndPrivacy", acceptTermsAndPrivacy ? "true" : "false");
+    form.set(
+      "acceptProviderPrivacy",
+      acceptPrivacyCommunications ? "true" : "false"
+    );
+    form.set(
+      "acceptTermsAndPrivacy",
+      acceptAuthorizedUse && acceptPrivacyCommunications ? "true" : "false"
+    );
     if (selectedSites.length > 0) {
       form.set("siteIds", JSON.stringify(selectedSites.map((s) => s.id)));
       form.set("primarySiteId", selectedSites[0].id);
@@ -515,11 +519,12 @@ export function SignupForm() {
                 </p>
               </div>
 
-              <ProviderAgreementSection
-                acceptAuthorization={acceptProviderAuthorization}
-                acceptPrivacy={acceptProviderPrivacy}
-                onAcceptAuthorization={setAcceptProviderAuthorization}
-                onAcceptPrivacy={setAcceptProviderPrivacy}
+              <AccountAgreementSection
+                role="PROVIDER"
+                acceptAuthorization={acceptAuthorizedUse}
+                acceptPrivacy={acceptPrivacyCommunications}
+                onAcceptAuthorization={setAcceptAuthorizedUse}
+                onAcceptPrivacy={setAcceptPrivacyCommunications}
                 onOpenDocument={setLegalDocSlug}
               />
 
@@ -651,9 +656,12 @@ export function SignupForm() {
                 />
               )}
 
-              <RepAgreementSection
-                accepted={acceptTermsAndPrivacy}
-                onAccept={setAcceptTermsAndPrivacy}
+              <AccountAgreementSection
+                role={role === "COMPANY_ADMIN" ? "COMPANY_ADMIN" : "REP"}
+                acceptAuthorization={acceptAuthorizedUse}
+                acceptPrivacy={acceptPrivacyCommunications}
+                onAcceptAuthorization={setAcceptAuthorizedUse}
+                onAcceptPrivacy={setAcceptPrivacyCommunications}
                 onOpenDocument={setLegalDocSlug}
               />
             </>
@@ -677,8 +685,9 @@ export function SignupForm() {
                 loading ||
                 (role === "PROVIDER" &&
                   providerStep === 4 &&
-                  (!acceptProviderAuthorization || !acceptProviderPrivacy)) ||
-                (role !== "PROVIDER" && !acceptTermsAndPrivacy)
+                  (!acceptAuthorizedUse || !acceptPrivacyCommunications)) ||
+                (role !== "PROVIDER" &&
+                  (!acceptAuthorizedUse || !acceptPrivacyCommunications))
               }
             >
               {loading

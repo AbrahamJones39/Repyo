@@ -118,6 +118,80 @@ function DocLink({
   );
 }
 
+export function AccountAgreementSection({
+  role,
+  acceptAuthorization,
+  acceptPrivacy,
+  onAcceptAuthorization,
+  onAcceptPrivacy,
+  onOpenDocument,
+}: {
+  role: "PROVIDER" | "REP" | "COMPANY_ADMIN";
+  acceptAuthorization: boolean;
+  acceptPrivacy: boolean;
+  onAcceptAuthorization: (v: boolean) => void;
+  onAcceptPrivacy: (v: boolean) => void;
+  onOpenDocument: (slug: string) => void;
+}) {
+  const userAgreementSlug =
+    role === "PROVIDER" ? "provider-user-agreement" : "terms-of-use";
+
+  return (
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Account Agreement
+        </h3>
+        <p className="mt-1 text-xs text-slate-600">
+          Read each document before accepting. Account creation requires both
+          acknowledgements below.
+        </p>
+      </div>
+
+      <label className="flex items-start gap-3 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={acceptAuthorization}
+          onChange={(e) => onAcceptAuthorization(e.target.checked)}
+          className="mt-1"
+          required
+        />
+        <span>
+          I confirm that I am authorized to use RepYo and agree to the{" "}
+          <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
+            RepYo terms of use
+          </DocLink>{" "}
+          and the{" "}
+          <DocLink slug={userAgreementSlug} onOpen={onOpenDocument}>
+            user agreement applicable to my account type
+          </DocLink>
+          . I understand that RepYo may involve confidential healthcare information
+          and that I may access or use such information only for authorized
+          purposes.
+        </span>
+      </label>
+
+      <label className="flex items-start gap-3 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={acceptPrivacy}
+          onChange={(e) => onAcceptPrivacy(e.target.checked)}
+          className="mt-1"
+          required
+        />
+        <span>
+          I acknowledge that I have been provided access to the{" "}
+          <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
+            RepYo privacy policy
+          </DocLink>{" "}
+          and consent to necessary electronic account security, requests,
+          scheduling, and service communication.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 export function ProviderAgreementSection({
   acceptAuthorization,
   acceptPrivacy,
@@ -132,70 +206,14 @@ export function ProviderAgreementSection({
   onOpenDocument: (slug: string) => void;
 }) {
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Account Agreement
-        </h3>
-        <p className="mt-1 text-xs text-slate-600">
-          Read each document before accepting. Account creation requires all
-          agreements below.
-        </p>
-      </div>
-
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={acceptAuthorization}
-          onChange={(e) => onAcceptAuthorization(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I confirm that I am authorized by the healthcare organization identified
-          above to use RepYo. I have read and agree to the{" "}
-          <DocLink slug="provider-user-agreement" onOpen={onOpenDocument}>
-            RepYo Healthcare Provider User Agreement
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="phi-security-requirements" onOpen={onOpenDocument}>
-            PHI, Privacy &amp; Security Requirements
-          </DocLink>
-          , and acknowledge that I am responsible for entering, accessing, and
-          sharing patient information only as authorized and reasonably necessary
-          for legitimate professional purposes.
-        </span>
-      </label>
-
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={acceptPrivacy}
-          onChange={(e) => onAcceptPrivacy(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I acknowledge the{" "}
-          <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-            RepYo Privacy Policy
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
-            Terms of Use
-          </DocLink>{" "}
-          and consent to electronic service, security, scheduling, and request
-          notifications.
-        </span>
-      </label>
-
-      <p className="text-xs leading-relaxed text-slate-500">
-        By creating an account, you understand that RepYo is a
-        representative-support request and scheduling platform. RepYo is not an
-        emergency service, electronic health record, or substitute for your
-        organization&apos;s clinical communication systems.
-      </p>
-    </div>
+    <AccountAgreementSection
+      role="PROVIDER"
+      acceptAuthorization={acceptAuthorization}
+      acceptPrivacy={acceptPrivacy}
+      onAcceptAuthorization={onAcceptAuthorization}
+      onAcceptPrivacy={onAcceptPrivacy}
+      onOpenDocument={onOpenDocument}
+    />
   );
 }
 
@@ -209,30 +227,13 @@ export function RepAgreementSection({
   onOpenDocument: (slug: string) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Account Agreement
-      </h3>
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={accepted}
-          onChange={(e) => onAccept(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I have read and agree to the{" "}
-          <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
-            Terms of Use
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-            Privacy Policy
-          </DocLink>
-          .
-        </span>
-      </label>
-    </div>
+    <AccountAgreementSection
+      role="REP"
+      acceptAuthorization={accepted}
+      acceptPrivacy={accepted}
+      onAcceptAuthorization={onAccept}
+      onAcceptPrivacy={onAccept}
+      onOpenDocument={onOpenDocument}
+    />
   );
 }

@@ -8,6 +8,10 @@ import { Input, Select } from "@/components/ui/input";
 import { fetchJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Building2, CheckCircle2, FileText, Shield } from "lucide-react";
+import {
+  AccountAgreementSection,
+  LegalDocumentModal,
+} from "@/components/legal/legal-document-modal";
 
 interface Organization {
   id: string;
@@ -45,6 +49,7 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
   const [facilityId, setFacilityId] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptUserAgreement, setAcceptUserAgreement] = useState(false);
+  const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [phiEnabled, setPhiEnabled] = useState(false);
 
@@ -336,39 +341,14 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
                 </p>
               </div>
 
-              <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-4">
-                <input
-                  type="checkbox"
-                  checked={acceptTerms}
-                  onChange={(e) => setAcceptTerms(e.target.checked)}
-                  className="mt-1"
-                />
-                <div className="text-sm">
-                  <p className="font-medium text-slate-900">GoRepYo Terms of Service</p>
-                  <p className="mt-1 text-slate-600">
-                    I agree to use GoRepYo in accordance with applicable policies,
-                    including restrictions on PHI when my organization is not yet
-                    PHI-enabled.
-                  </p>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-4">
-                <input
-                  type="checkbox"
-                  checked={acceptUserAgreement}
-                  onChange={(e) => setAcceptUserAgreement(e.target.checked)}
-                  className="mt-1"
-                />
-                <div className="text-sm">
-                  <p className="font-medium text-slate-900">Individual User Agreement</p>
-                  <p className="mt-1 text-slate-600">
-                    I confirm I am an authorized healthcare worker and will only
-                    submit PHI when my organization has completed verification and
-                    PHI enablement.
-                  </p>
-                </div>
-              </label>
+              <AccountAgreementSection
+                role="PROVIDER"
+                acceptAuthorization={acceptUserAgreement}
+                acceptPrivacy={acceptTerms}
+                onAcceptAuthorization={setAcceptUserAgreement}
+                onAcceptPrivacy={setAcceptTerms}
+                onOpenDocument={setLegalDocSlug}
+              />
 
               <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-600">
                 <FileText className="mb-1 inline h-4 w-4" /> Hospital BAA and enterprise
@@ -390,6 +370,11 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
           )}
         </div>
       </div>
+      <LegalDocumentModal
+        slug={legalDocSlug}
+        open={Boolean(legalDocSlug)}
+        onClose={() => setLegalDocSlug(null)}
+      />
     </div>
   );
 }

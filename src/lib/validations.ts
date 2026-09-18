@@ -451,27 +451,20 @@ export const signupSchema = z
         });
       }
     }
-    if (data.role === "PROVIDER") {
-      if (!data.acceptProviderAuthorization) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "You must accept the Provider User Agreement and PHI requirements",
-          path: ["acceptProviderAuthorization"],
-        });
-      }
-      if (!data.acceptProviderPrivacy) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "You must acknowledge the Privacy Policy and Terms of Use",
-          path: ["acceptProviderPrivacy"],
-        });
-      }
-    }
-    if (["REP", "COMPANY_ADMIN"].includes(data.role) && !data.acceptTermsAndPrivacy) {
+    if (!data.acceptProviderAuthorization) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "You must accept the Terms of Use and Privacy Policy",
-        path: ["acceptTermsAndPrivacy"],
+        message:
+          "You must confirm you are authorized to use RepYo and agree to the Terms of Use and the user agreement for your account type",
+        path: ["acceptProviderAuthorization"],
+      });
+    }
+    if (!data.acceptProviderPrivacy) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "You must acknowledge the Privacy Policy and consent to necessary electronic communications",
+        path: ["acceptProviderPrivacy"],
       });
     }
   });

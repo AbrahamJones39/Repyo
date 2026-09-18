@@ -9,10 +9,10 @@ import {
 } from "@/lib/invitations/service";
 import { recordAgreementAcceptances } from "@/lib/legal/acceptance";
 import {
-  PROVIDER_AUTHORIZATION_SLUGS,
-  PROVIDER_PRIVACY_SLUGS,
-  REP_REQUIRED_SLUGS,
+  ACCOUNT_PRIVACY_SLUGS,
+  authorizationSlugsForRole,
 } from "@/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
 import type { SignupPayload } from "@/lib/signup/types";
 import {
   verifyCompanySignup,
@@ -148,24 +148,23 @@ export async function completeSignup(params: {
 
   const legalName = name.trim();
 
-  if (role === "PROVIDER" && acceptProviderAuthorization && acceptProviderPrivacy) {
-    await recordAgreementAcceptances(
-      [...PROVIDER_AUTHORIZATION_SLUGS, ...PROVIDER_PRIVACY_SLUGS],
-      {
-        userId: user.id,
-        legalName,
-        role,
-        organizationId: linkedOrganizationId,
-        organizationName,
-        facilityName: facilityName?.trim() ?? null,
-        signatureText: `${legalName} — provider signup acceptance`,
-      }
-    );
-  } else if (["REP", "COMPANY_ADMIN"].includes(role) && acceptTermsAndPrivacy) {
-    await recordAgreementAcceptances([...REP_REQUIRED_SLUGS], {
+  const acceptedBoth =
+    (acceptProviderAuthorization && acceptProviderPrivacy) ||
+    acceptTermsAndPrivacy;
+
+  if (acceptedBoth) {
+    await syncLegalDocumentsFromCode();
+    const slugs = [
+      ...authorizationSlugsForRole(role),
+      ...ACCOUNT_PRIVACY_SLUGS,
+    ];
+    await recordAgreementAcceptances([...new Set(slugs)], {
       userId: user.id,
       legalName,
       role,
+      organizationId: linkedOrganizationId,
+      organizationName,
+      facilityName: facilityName?.trim() ?? null,
       signatureText: `${legalName} — account signup acceptance`,
     });
   }
