@@ -7,6 +7,10 @@ import {
   PRIVACY_POLICY_CONTENT,
   PRIVACY_POLICY_VERSION,
 } from "@/lib/legal/privacy-policy-v2";
+import {
+  REP_USER_AGREEMENT_CONTENT,
+  REP_USER_AGREEMENT_VERSION,
+} from "@/lib/legal/rep-user-agreement-v2";
 
 export const LEGAL_DOCUMENT_VERSION = "1.0.0";
 
@@ -26,7 +30,11 @@ export const PROVIDER_REQUIRED_SLUGS = [
   "terms-of-use",
 ] as const;
 
-export const REP_REQUIRED_SLUGS = ["terms-of-use", "privacy-policy"] as const;
+export const REP_REQUIRED_SLUGS = [
+  "terms-of-use",
+  "privacy-policy",
+  "rep-user-agreement",
+] as const;
 
 export const COMPANY_ADMIN_REQUIRED_SLUGS = ["terms-of-use", "privacy-policy"] as const;
 
@@ -39,6 +47,7 @@ export function requiredSlugsForRole(role: Role): readonly string[] {
 
 export function userAgreementSlugForRole(role: Role): string {
   if (role === "PROVIDER") return "provider-user-agreement";
+  if (role === "REP") return "rep-user-agreement";
   return "terms-of-use";
 }
 
@@ -46,6 +55,9 @@ export function userAgreementSlugForRole(role: Role): string {
 export function authorizationSlugsForRole(role: Role): readonly string[] {
   if (role === "PROVIDER") {
     return ["terms-of-use", "provider-user-agreement", "phi-security-requirements"];
+  }
+  if (role === "REP") {
+    return ["terms-of-use", "rep-user-agreement"];
   }
   return ["terms-of-use"];
 }
@@ -190,5 +202,14 @@ Enterprise HIPAA obligations (including BAA execution) are between your healthca
     summary:
       "Terms of Use v2.0 governing access to the RepYo website, mobile application, and platform.",
     content: TERMS_OF_USE_CONTENT,
+  },
+  {
+    slug: "rep-user-agreement",
+    title: "RepYo Medical Device Representative User Agreement",
+    version: REP_USER_AGREEMENT_VERSION,
+    roleScopes: ["REP"],
+    summary:
+      "Individual clickwrap agreement for authorized medical device representatives using RepYo.",
+    content: REP_USER_AGREEMENT_CONTENT,
   },
 ];

@@ -201,7 +201,11 @@ export function AccountAgreementSection({
   onOpenDocument: (slug: string) => void;
 }) {
   const userAgreementSlug =
-    role === "PROVIDER" ? "provider-user-agreement" : "terms-of-use";
+    role === "PROVIDER"
+      ? "provider-user-agreement"
+      : role === "REP"
+        ? "rep-user-agreement"
+        : "terms-of-use";
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -210,13 +214,17 @@ export function AccountAgreementSection({
           Account Agreement
         </h3>
         <p className="mt-1 text-xs text-slate-600">
-          Read the Terms of Use and Privacy Policy below, then accept both
-          acknowledgements to create your account.
+          {role === "REP"
+            ? "Read the Terms of Use, Privacy Policy, and Medical Device Representative User Agreement below, then accept both acknowledgements to create your account."
+            : "Read the Terms of Use and Privacy Policy below, then accept both acknowledgements to create your account."}
         </p>
       </div>
 
       <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
       <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
+      {role === "REP" && (
+        <LegalDocumentEmbed slug="rep-user-agreement" onOpen={onOpenDocument} />
+      )}
       {role === "PROVIDER" && (
         <LegalDocumentEmbed slug="provider-user-agreement" onOpen={onOpenDocument} />
       )}
