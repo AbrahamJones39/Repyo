@@ -341,6 +341,8 @@ export function AccountAgreementSection({
   onAcceptAuthorization,
   onAcceptPrivacy,
   onOpenDocument,
+  acceptOrgAdminAcknowledgment = false,
+  onAcceptOrgAdminAcknowledgment,
 }: {
   role: "REP" | "COMPANY_ADMIN";
   acceptAuthorization: boolean;
@@ -348,6 +350,8 @@ export function AccountAgreementSection({
   onAcceptAuthorization: (v: boolean) => void;
   onAcceptPrivacy: (v: boolean) => void;
   onOpenDocument: (slug: string) => void;
+  acceptOrgAdminAcknowledgment?: boolean;
+  onAcceptOrgAdminAcknowledgment?: (v: boolean) => void;
 }) {
   const userAgreementSlug =
     role === "REP" ? "rep-user-agreement" : "terms-of-use";
@@ -361,7 +365,7 @@ export function AccountAgreementSection({
         <p className="mt-1 text-xs text-slate-600">
           {role === "REP"
             ? "Read the Terms of Use, Privacy Policy, and Medical Device Representative User Agreement below, then accept both acknowledgements to create your account."
-            : "Read the Terms of Use and Privacy Policy below, then accept both acknowledgements to create your account."}
+            : "Read the Terms of Use, Privacy Policy, and Organization Administrator Acknowledgment below, then accept all acknowledgements to create your account."}
         </p>
       </div>
 
@@ -369,6 +373,12 @@ export function AccountAgreementSection({
       <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
       {role === "REP" && (
         <LegalDocumentEmbed slug="rep-user-agreement" onOpen={onOpenDocument} />
+      )}
+      {role === "COMPANY_ADMIN" && (
+        <LegalDocumentEmbed
+          slug="organization-admin-acknowledgment"
+          onOpen={onOpenDocument}
+        />
       )}
 
       <AgreementCheckbox
@@ -396,6 +406,26 @@ export function AccountAgreementSection({
         and consent to necessary electronic account security, requests,
         scheduling, and service communication.
       </AgreementCheckbox>
+
+      {role === "COMPANY_ADMIN" && onAcceptOrgAdminAcknowledgment && (
+        <AgreementCheckbox
+          checked={acceptOrgAdminAcknowledgment}
+          onChange={onAcceptOrgAdminAcknowledgment}
+        >
+          I confirm that I am authorized by the organization identified above to
+          act as a RepYo organization administrator. I have read and agree to
+          the RepYo{" "}
+          <DocLink
+            slug="organization-admin-acknowledgment"
+            onOpen={onOpenDocument}
+          >
+            organization administrator acknowledgment
+          </DocLink>{" "}
+          and understand that my administrator privileges must be used only for
+          authorized organizational purposes, including appropriately managing
+          user access and protecting confidential information and PHI.
+        </AgreementCheckbox>
+      )}
     </div>
   );
 }

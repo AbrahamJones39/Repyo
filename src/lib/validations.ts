@@ -398,6 +398,7 @@ export const signupSchema = z
     requestOrgAccess: z.boolean().optional(),
     acceptProviderAuthorization: z.boolean().optional(),
     acceptProviderPrivacy: z.boolean().optional(),
+    acceptOrgAdminAcknowledgment: z.boolean().optional(),
     acceptTermsAndPrivacy: z.boolean().optional(),
     acceptProviderOrgAuth: z.boolean().optional(),
     acceptProviderUserAgreement: z.boolean().optional(),
@@ -520,6 +521,14 @@ export const signupSchema = z
           message:
             "You must acknowledge the Privacy Policy and consent to necessary electronic communications",
           path: ["acceptProviderPrivacy"],
+        });
+      }
+      if (data.role === "COMPANY_ADMIN" && !data.acceptOrgAdminAcknowledgment) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "You must confirm you are authorized to act as a RepYo organization administrator and agree to the organization administrator acknowledgment",
+          path: ["acceptOrgAdminAcknowledgment"],
         });
       }
     }

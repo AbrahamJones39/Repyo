@@ -45,6 +45,7 @@ export async function completeSignup(params: {
     zipCodeEnd,
     acceptProviderAuthorization,
     acceptProviderPrivacy,
+    acceptOrgAdminAcknowledgment,
     acceptTermsAndPrivacy,
     acceptProviderOrgAuth,
     acceptProviderUserAgreement,
@@ -166,8 +167,12 @@ export async function completeSignup(params: {
   const acceptedAgreements =
     role === "PROVIDER"
       ? providerAcceptedAllSix
-      : Boolean(acceptProviderAuthorization && acceptProviderPrivacy) ||
-        Boolean(acceptTermsAndPrivacy);
+      : role === "COMPANY_ADMIN"
+        ? (Boolean(acceptProviderAuthorization && acceptProviderPrivacy) ||
+            Boolean(acceptTermsAndPrivacy)) &&
+          Boolean(acceptOrgAdminAcknowledgment)
+        : Boolean(acceptProviderAuthorization && acceptProviderPrivacy) ||
+          Boolean(acceptTermsAndPrivacy);
 
   if (acceptedAgreements) {
     await syncLegalDocumentsFromCode();

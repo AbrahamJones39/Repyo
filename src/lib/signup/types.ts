@@ -18,6 +18,7 @@ export type SignupPayload = {
   zipCodeEnd?: string | null;
   acceptProviderAuthorization?: boolean;
   acceptProviderPrivacy?: boolean;
+  acceptOrgAdminAcknowledgment?: boolean;
   acceptTermsAndPrivacy?: boolean;
   acceptProviderOrgAuth?: boolean;
   acceptProviderUserAgreement?: boolean;

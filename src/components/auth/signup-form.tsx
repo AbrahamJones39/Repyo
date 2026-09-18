@@ -82,6 +82,8 @@ export function SignupForm() {
   const [acceptAuthorizedUse, setAcceptAuthorizedUse] = useState(false);
   const [acceptPrivacyCommunications, setAcceptPrivacyCommunications] =
     useState(false);
+  const [acceptOrgAdminAcknowledgment, setAcceptOrgAdminAcknowledgment] =
+    useState(false);
   const [providerChecks, setProviderChecks] = useState(
     EMPTY_PROVIDER_AGREEMENT_CHECKS
   );
@@ -158,6 +160,7 @@ export function SignupForm() {
     setProviderStep(1);
     setAcceptAuthorizedUse(false);
     setAcceptPrivacyCommunications(false);
+    setAcceptOrgAdminAcknowledgment(false);
     setProviderChecks(EMPTY_PROVIDER_AGREEMENT_CHECKS);
     setSelectedSites([]);
     setError("");
@@ -245,12 +248,22 @@ export function SignupForm() {
       acceptPrivacyCommunications ? "true" : "false"
     );
     form.set(
+      "acceptOrgAdminAcknowledgment",
+      acceptOrgAdminAcknowledgment ? "true" : "false"
+    );
+    const nonProviderAgreementsAccepted =
+      role === "COMPANY_ADMIN"
+        ? acceptAuthorizedUse &&
+          acceptPrivacyCommunications &&
+          acceptOrgAdminAcknowledgment
+        : acceptAuthorizedUse && acceptPrivacyCommunications;
+    form.set(
       "acceptTermsAndPrivacy",
       role === "PROVIDER"
         ? allProviderChecksAccepted(providerChecks)
           ? "true"
           : "false"
-        : acceptAuthorizedUse && acceptPrivacyCommunications
+        : nonProviderAgreementsAccepted
           ? "true"
           : "false"
     );
@@ -692,6 +705,10 @@ export function SignupForm() {
                 acceptPrivacy={acceptPrivacyCommunications}
                 onAcceptAuthorization={setAcceptAuthorizedUse}
                 onAcceptPrivacy={setAcceptPrivacyCommunications}
+                acceptOrgAdminAcknowledgment={acceptOrgAdminAcknowledgment}
+                onAcceptOrgAdminAcknowledgment={
+                  setAcceptOrgAdminAcknowledgment
+                }
                 onOpenDocument={setLegalDocSlug}
               />
             </>
@@ -716,8 +733,12 @@ export function SignupForm() {
                 (role === "PROVIDER" &&
                   providerStep === 4 &&
                   !allProviderChecksAccepted(providerChecks)) ||
-                (role !== "PROVIDER" &&
-                  (!acceptAuthorizedUse || !acceptPrivacyCommunications))
+                (role === "REP" &&
+                  (!acceptAuthorizedUse || !acceptPrivacyCommunications)) ||
+                (role === "COMPANY_ADMIN" &&
+                  (!acceptAuthorizedUse ||
+                    !acceptPrivacyCommunications ||
+                    !acceptOrgAdminAcknowledgment))
               }
             >
               {loading

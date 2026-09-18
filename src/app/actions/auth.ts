@@ -42,6 +42,8 @@ export async function signupAction(formData: FormData) {
       formData.get("acceptProviderAuthorization") === "true" || undefined,
     acceptProviderPrivacy:
       formData.get("acceptProviderPrivacy") === "true" || undefined,
+    acceptOrgAdminAcknowledgment:
+      formData.get("acceptOrgAdminAcknowledgment") === "true" || undefined,
     acceptTermsAndPrivacy:
       formData.get("acceptTermsAndPrivacy") === "true" || undefined,
     acceptProviderOrgAuth:
@@ -87,6 +89,7 @@ export async function signupAction(formData: FormData) {
     requestOrgAccess,
     acceptProviderAuthorization,
     acceptProviderPrivacy,
+    acceptOrgAdminAcknowledgment,
     acceptTermsAndPrivacy,
     acceptProviderOrgAuth,
     acceptProviderUserAgreement,
@@ -299,6 +302,7 @@ export async function signupAction(formData: FormData) {
       zipCodeEnd,
       acceptProviderAuthorization,
       acceptProviderPrivacy,
+      acceptOrgAdminAcknowledgment,
       acceptTermsAndPrivacy,
       acceptProviderOrgAuth,
       acceptProviderUserAgreement,
@@ -363,6 +367,7 @@ export async function signupAction(formData: FormData) {
       zipCodeEnd,
       acceptProviderAuthorization,
       acceptProviderPrivacy,
+      acceptOrgAdminAcknowledgment,
       acceptTermsAndPrivacy,
       acceptProviderOrgAuth,
       acceptProviderUserAgreement,

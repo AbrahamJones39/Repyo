@@ -15,6 +15,10 @@ import {
   PROVIDER_USER_AGREEMENT_CONTENT,
   PROVIDER_USER_AGREEMENT_VERSION,
 } from "@/lib/legal/provider-user-agreement-v2";
+import {
+  ORGANIZATION_ADMIN_ACKNOWLEDGMENT_CONTENT,
+  ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION,
+} from "@/lib/legal/organization-admin-acknowledgment";
 
 export const LEGAL_DOCUMENT_VERSION = "1.0.0";
 
@@ -40,7 +44,11 @@ export const REP_REQUIRED_SLUGS = [
   "rep-user-agreement",
 ] as const;
 
-export const COMPANY_ADMIN_REQUIRED_SLUGS = ["terms-of-use", "privacy-policy"] as const;
+export const COMPANY_ADMIN_REQUIRED_SLUGS = [
+  "terms-of-use",
+  "privacy-policy",
+  "organization-admin-acknowledgment",
+] as const;
 
 export function requiredSlugsForRole(role: Role): readonly string[] {
   if (role === "PROVIDER") return PROVIDER_REQUIRED_SLUGS;
@@ -62,6 +70,9 @@ export function authorizationSlugsForRole(role: Role): readonly string[] {
   }
   if (role === "REP") {
     return ["terms-of-use", "rep-user-agreement"];
+  }
+  if (role === "COMPANY_ADMIN") {
+    return ["terms-of-use", "organization-admin-acknowledgment"];
   }
   return ["terms-of-use"];
 }
@@ -181,5 +192,14 @@ Enterprise HIPAA obligations (including BAA execution) are between your healthca
     summary:
       "Individual clickwrap agreement for authorized medical device representatives using RepYo.",
     content: REP_USER_AGREEMENT_CONTENT,
+  },
+  {
+    slug: "organization-admin-acknowledgment",
+    title: "RepYo Organization Administrator Acknowledgment",
+    version: ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION,
+    roleScopes: ["COMPANY_ADMIN"],
+    summary:
+      "Organization Administrator Acknowledgment for individuals granted administrative privileges within RepYo.",
+    content: ORGANIZATION_ADMIN_ACKNOWLEDGMENT_CONTENT,
   },
 ];
