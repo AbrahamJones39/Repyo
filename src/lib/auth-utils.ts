@@ -10,7 +10,7 @@ export const ROLE_ROUTES: Record<Role, string> = {
 export const ROLE_LABELS: Record<Role, string> = {
   PROVIDER: "Healthcare Provider",
   REP: "Device Representative",
-  COMPANY_ADMIN: "Admin",
+  COMPANY_ADMIN: "Device Team Administrator/Manager",
   SUPER_ADMIN: "Platform Admin",
 };
 

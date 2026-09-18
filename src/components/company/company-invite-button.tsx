@@ -7,7 +7,7 @@ import { InviteModal } from "@/components/invitations/invite-modal";
 
 const COMPANY_INVITE_ROLES = [
   { value: "REP" as const, label: "Rep" },
-  { value: "COMPANY_ADMIN" as const, label: "Admin" },
+  { value: "COMPANY_ADMIN" as const, label: "Device Team Administrator/Manager" },
 ];
 
 export function CompanyInviteButton({
