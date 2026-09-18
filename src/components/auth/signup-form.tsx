@@ -150,9 +150,8 @@ export function SignupForm() {
 
   useEffect(() => {
     setProviderStep(1);
-    setAcceptProviderAuthorization(false);
-    setAcceptProviderPrivacy(false);
-    setAcceptTermsAndPrivacy(false);
+    setAcceptAuthorizedUse(false);
+    setAcceptPrivacyCommunications(false);
     setSelectedSites([]);
     setError("");
   }, [role]);
@@ -274,7 +273,7 @@ export function SignupForm() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-4 py-10">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <BrandMark size="lg" />
           <p className="mt-2 text-sm text-slate-600">

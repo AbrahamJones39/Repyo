@@ -118,6 +118,73 @@ function DocLink({
   );
 }
 
+function LegalDocumentEmbed({
+  slug,
+  onOpen,
+}: {
+  slug: string;
+  onOpen: (slug: string) => void;
+}) {
+  const [doc, setDoc] = useState<{
+    title: string;
+    version: string;
+    content: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/legal/${slug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setDoc(data);
+      })
+      .catch(() => {
+        if (!cancelled) setDoc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-3 py-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            {doc?.title ?? (loading ? "Loading document..." : "Could not load document")}
+          </p>
+          {doc?.version && (
+            <p className="text-xs text-slate-500">Version {doc.version}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpen(slug)}
+          className="shrink-0 text-xs font-medium text-rose-600 underline hover:text-rose-700"
+        >
+          Expand
+        </button>
+      </div>
+      <div className="max-h-52 overflow-y-auto px-3 py-2">
+        {loading ? (
+          <p className="text-xs text-slate-500">Loading...</p>
+        ) : doc ? (
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700">
+            {doc.content.replace(/^#+\s/gm, "").trim()}
+          </pre>
+        ) : (
+          <p className="text-xs text-red-600">Could not load this document.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AccountAgreementSection({
   role,
   acceptAuthorization,
@@ -143,10 +210,16 @@ export function AccountAgreementSection({
           Account Agreement
         </h3>
         <p className="mt-1 text-xs text-slate-600">
-          Read each document before accepting. Account creation requires both
-          acknowledgements below.
+          Read the Terms of Use and Privacy Policy below, then accept both
+          acknowledgements to create your account.
         </p>
       </div>
+
+      <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
+      <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
+      {role === "PROVIDER" && (
+        <LegalDocumentEmbed slug="provider-user-agreement" onOpen={onOpenDocument} />
+      )}
 
       <label className="flex items-start gap-3 text-sm text-slate-700">
         <input
