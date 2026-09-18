@@ -9,6 +9,9 @@ import {
 import {
   LegalDocumentModal,
   AccountAgreementSection,
+  ProviderAccountAgreementSection,
+  EMPTY_PROVIDER_AGREEMENT_CHECKS,
+  allProviderChecksAccepted,
 } from "@/components/legal/legal-document-modal";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -79,6 +82,9 @@ export function SignupForm() {
   const [acceptAuthorizedUse, setAcceptAuthorizedUse] = useState(false);
   const [acceptPrivacyCommunications, setAcceptPrivacyCommunications] =
     useState(false);
+  const [providerChecks, setProviderChecks] = useState(
+    EMPTY_PROVIDER_AGREEMENT_CHECKS
+  );
   const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
@@ -152,6 +158,7 @@ export function SignupForm() {
     setProviderStep(1);
     setAcceptAuthorizedUse(false);
     setAcceptPrivacyCommunications(false);
+    setProviderChecks(EMPTY_PROVIDER_AGREEMENT_CHECKS);
     setSelectedSites([]);
     setError("");
   }, [role]);
@@ -195,7 +202,7 @@ export function SignupForm() {
       if (!values.requesterPhone?.trim()) return "Your phone number is required";
     }
     if (step === 4) {
-      if (!acceptAuthorizedUse || !acceptPrivacyCommunications) {
+      if (!allProviderChecksAccepted(providerChecks)) {
         return "You must accept all required agreements before creating your account";
       }
     }
@@ -239,7 +246,34 @@ export function SignupForm() {
     );
     form.set(
       "acceptTermsAndPrivacy",
-      acceptAuthorizedUse && acceptPrivacyCommunications ? "true" : "false"
+      role === "PROVIDER"
+        ? allProviderChecksAccepted(providerChecks)
+          ? "true"
+          : "false"
+        : acceptAuthorizedUse && acceptPrivacyCommunications
+          ? "true"
+          : "false"
+    );
+    form.set(
+      "acceptProviderOrgAuth",
+      providerChecks.orgAuth ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderUserAgreement",
+      providerChecks.userAgreement ? "true" : "false"
+    );
+    form.set("acceptProviderPhiUse", providerChecks.phiUse ? "true" : "false");
+    form.set(
+      "acceptProviderNotEmergency",
+      providerChecks.notEmergency ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderPrivacyAck",
+      providerChecks.privacyAck ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderElectronicComm",
+      providerChecks.electronicComm ? "true" : "false"
     );
     if (selectedSites.length > 0) {
       form.set("siteIds", JSON.stringify(selectedSites.map((s) => s.id)));
@@ -518,12 +552,9 @@ export function SignupForm() {
                 </p>
               </div>
 
-              <AccountAgreementSection
-                role="PROVIDER"
-                acceptAuthorization={acceptAuthorizedUse}
-                acceptPrivacy={acceptPrivacyCommunications}
-                onAcceptAuthorization={setAcceptAuthorizedUse}
-                onAcceptPrivacy={setAcceptPrivacyCommunications}
+              <ProviderAccountAgreementSection
+                checks={providerChecks}
+                onChange={setProviderChecks}
                 onOpenDocument={setLegalDocSlug}
               />
 
@@ -684,7 +715,7 @@ export function SignupForm() {
                 loading ||
                 (role === "PROVIDER" &&
                   providerStep === 4 &&
-                  (!acceptAuthorizedUse || !acceptPrivacyCommunications)) ||
+                  !allProviderChecksAccepted(providerChecks)) ||
                 (role !== "PROVIDER" &&
                   (!acceptAuthorizedUse || !acceptPrivacyCommunications))
               }

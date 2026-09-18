@@ -307,6 +307,12 @@ export const providerOnboardingSchema = z.object({
   facilityId: z.string().uuid().optional(),
   acceptTerms: z.boolean().optional(),
   acceptUserAgreement: z.boolean().optional(),
+  acceptProviderOrgAuth: z.boolean().optional(),
+  acceptProviderUserAgreement: z.boolean().optional(),
+  acceptProviderPhiUse: z.boolean().optional(),
+  acceptProviderNotEmergency: z.boolean().optional(),
+  acceptProviderPrivacyAck: z.boolean().optional(),
+  acceptProviderElectronicComm: z.boolean().optional(),
 });
 
 export const createNonPhiRequestSchema = z
@@ -393,6 +399,12 @@ export const signupSchema = z
     acceptProviderAuthorization: z.boolean().optional(),
     acceptProviderPrivacy: z.boolean().optional(),
     acceptTermsAndPrivacy: z.boolean().optional(),
+    acceptProviderOrgAuth: z.boolean().optional(),
+    acceptProviderUserAgreement: z.boolean().optional(),
+    acceptProviderPhiUse: z.boolean().optional(),
+    acceptProviderNotEmergency: z.boolean().optional(),
+    acceptProviderPrivacyAck: z.boolean().optional(),
+    acceptProviderElectronicComm: z.boolean().optional(),
     siteIds: z.string().optional(),
     primarySiteId: z.string().uuid().optional(),
     inviteToken: z.string().optional(),
@@ -451,21 +463,65 @@ export const signupSchema = z
         });
       }
     }
-    if (!data.acceptProviderAuthorization) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "You must confirm you are authorized to use RepYo and agree to the Terms of Use and the user agreement for your account type",
-        path: ["acceptProviderAuthorization"],
-      });
-    }
-    if (!data.acceptProviderPrivacy) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "You must acknowledge the Privacy Policy and consent to necessary electronic communications",
-        path: ["acceptProviderPrivacy"],
-      });
+    if (data.role === "PROVIDER") {
+      const providerChecks = [
+        {
+          key: "acceptProviderOrgAuth" as const,
+          message:
+            "You must confirm you are authorized by the healthcare organization identified above",
+        },
+        {
+          key: "acceptProviderUserAgreement" as const,
+          message:
+            "You must agree to the RepYo healthcare provider user agreement",
+        },
+        {
+          key: "acceptProviderPhiUse" as const,
+          message:
+            "You must acknowledge the protected health information requirements",
+        },
+        {
+          key: "acceptProviderNotEmergency" as const,
+          message:
+            "You must acknowledge that RepYo is not an emergency service, EHR, or substitute for clinical communication",
+        },
+        {
+          key: "acceptProviderPrivacyAck" as const,
+          message:
+            "You must acknowledge that you have been provided access to the RepYo privacy policy",
+        },
+        {
+          key: "acceptProviderElectronicComm" as const,
+          message:
+            "You must consent to electronic service, security, scheduling, request status, and account communication",
+        },
+      ];
+      for (const field of providerChecks) {
+        if (!data[field.key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: field.message,
+            path: [field.key],
+          });
+        }
+      }
+    } else {
+      if (!data.acceptProviderAuthorization) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "You must confirm you are authorized to use RepYo and agree to the Terms of Use and the user agreement for your account type",
+          path: ["acceptProviderAuthorization"],
+        });
+      }
+      if (!data.acceptProviderPrivacy) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "You must acknowledge the Privacy Policy and consent to necessary electronic communications",
+          path: ["acceptProviderPrivacy"],
+        });
+      }
     }
   });
 

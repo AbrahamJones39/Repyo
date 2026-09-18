@@ -9,8 +9,10 @@ import { fetchJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Building2, CheckCircle2, FileText, Shield } from "lucide-react";
 import {
-  AccountAgreementSection,
   LegalDocumentModal,
+  ProviderAccountAgreementSection,
+  EMPTY_PROVIDER_AGREEMENT_CHECKS,
+  allProviderChecksAccepted,
 } from "@/components/legal/legal-document-modal";
 
 interface Organization {
@@ -47,8 +49,9 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
   const [requesterPhone, setRequesterPhone] = useState("");
   const [requesterFax, setRequesterFax] = useState("");
   const [facilityId, setFacilityId] = useState("");
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [acceptUserAgreement, setAcceptUserAgreement] = useState(false);
+  const [providerChecks, setProviderChecks] = useState(
+    EMPTY_PROVIDER_AGREEMENT_CHECKS
+  );
   const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [phiEnabled, setPhiEnabled] = useState(false);
@@ -341,13 +344,11 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
                 </p>
               </div>
 
-              <AccountAgreementSection
-                role="PROVIDER"
-                acceptAuthorization={acceptUserAgreement}
-                acceptPrivacy={acceptTerms}
-                onAcceptAuthorization={setAcceptUserAgreement}
-                onAcceptPrivacy={setAcceptTerms}
+              <ProviderAccountAgreementSection
+                checks={providerChecks}
+                onChange={setProviderChecks}
                 onOpenDocument={setLegalDocSlug}
+                ctaHint="activate your account"
               />
 
               <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-600">
@@ -358,9 +359,19 @@ export function ProviderOnboardingPage({ userName }: { userName: string }) {
 
               <Button
                 className="w-full"
-                disabled={saving || !acceptTerms || !acceptUserAgreement}
+                disabled={saving || !allProviderChecksAccepted(providerChecks)}
                 onClick={() =>
-                  submitStep({ step: 3, acceptTerms, acceptUserAgreement })
+                  submitStep({
+                    step: 3,
+                    acceptTerms: true,
+                    acceptUserAgreement: true,
+                    acceptProviderOrgAuth: providerChecks.orgAuth,
+                    acceptProviderUserAgreement: providerChecks.userAgreement,
+                    acceptProviderPhiUse: providerChecks.phiUse,
+                    acceptProviderNotEmergency: providerChecks.notEmergency,
+                    acceptProviderPrivacyAck: providerChecks.privacyAck,
+                    acceptProviderElectronicComm: providerChecks.electronicComm,
+                  })
                 }
               >
                 <CheckCircle2 className="h-4 w-4" />

@@ -11,6 +11,10 @@ import {
   REP_USER_AGREEMENT_CONTENT,
   REP_USER_AGREEMENT_VERSION,
 } from "@/lib/legal/rep-user-agreement-v2";
+import {
+  PROVIDER_USER_AGREEMENT_CONTENT,
+  PROVIDER_USER_AGREEMENT_VERSION,
+} from "@/lib/legal/provider-user-agreement-v2";
 
 export const LEGAL_DOCUMENT_VERSION = "1.0.0";
 
@@ -51,7 +55,7 @@ export function userAgreementSlugForRole(role: Role): string {
   return "terms-of-use";
 }
 
-/** Checkbox 1 — authorization, terms, and role-specific user agreement */
+/** Rep/Admin checkbox 1 — authorization, terms, and role-specific user agreement */
 export function authorizationSlugsForRole(role: Role): readonly string[] {
   if (role === "PROVIDER") {
     return ["terms-of-use", "provider-user-agreement", "phi-security-requirements"];
@@ -62,81 +66,47 @@ export function authorizationSlugsForRole(role: Role): readonly string[] {
   return ["terms-of-use"];
 }
 
-/** Checkbox 2 — privacy policy */
+/** Rep/Admin checkbox 2 — privacy policy */
 export const ACCOUNT_PRIVACY_SLUGS = ["privacy-policy"] as const;
 
-/** Checkbox 1 → these documents */
+/**
+ * Provider recorded slugs when all six checkboxes are accepted:
+ * checkbox 2 → provider-user-agreement, checkbox 5 → privacy-policy,
+ * terms-of-use (shown in the Account Agreement box),
+ * phi-security-requirements (tied to PHI checkbox 3; not shown as an embed).
+ */
+export const PROVIDER_ACCEPTANCE_SLUGS = PROVIDER_REQUIRED_SLUGS;
+
+export const PROVIDER_AGREEMENT_FIELD_KEYS = [
+  "acceptProviderOrgAuth",
+  "acceptProviderUserAgreement",
+  "acceptProviderPhiUse",
+  "acceptProviderNotEmergency",
+  "acceptProviderPrivacyAck",
+  "acceptProviderElectronicComm",
+] as const;
+
+export type ProviderAgreementFieldKey =
+  (typeof PROVIDER_AGREEMENT_FIELD_KEYS)[number];
+
+/** Checkbox 2 → provider-user-agreement; checkbox 3 also records phi-security-requirements */
 export const PROVIDER_AUTHORIZATION_SLUGS = [
   "provider-user-agreement",
   "phi-security-requirements",
 ] as const;
 
-/** Checkbox 2 → these documents */
+/** Checkbox 5 → privacy-policy; terms-of-use is also recorded because it is shown in the box */
 export const PROVIDER_PRIVACY_SLUGS = ["privacy-policy", "terms-of-use"] as const;
 
 export const LEGAL_DOCUMENTS: LegalDocDefinition[] = [
   {
     slug: "provider-user-agreement",
     title: "RepYo Healthcare Provider User Agreement",
-    version: LEGAL_DOCUMENT_VERSION,
+    version: PROVIDER_USER_AGREEMENT_VERSION,
     roleScopes: ["PROVIDER"],
     summary:
-      "Individual clickwrap agreement for authorized healthcare workers using RepYo on behalf of a covered entity.",
-    content: `# RepYo Healthcare Provider User Agreement
-
-**Version ${LEGAL_DOCUMENT_VERSION} · GoRepYo LLC**
-
-## 1. Parties and purpose
-
-This Healthcare Provider User Agreement ("Agreement") is between you, an individual authorized healthcare worker, and GoRepYo LLC ("RepYo," "we," "us"). RepYo provides a representative-support request and scheduling platform. RepYo is **not** an emergency service, electronic health record, or substitute for your organization's clinical communication systems.
-
-## 2. Your authorization
-
-You represent and warrant that:
-
-- You are employed by or otherwise authorized by the healthcare organization identified in your account to use RepYo for legitimate professional purposes.
-- You will use RepYo only within the scope of your professional duties and organizational policies.
-- You will not share your credentials or allow unauthorized persons to access RepYo using your account.
-
-## 3. Protected health information (PHI)
-
-When your organization has executed a Business Associate Agreement (BAA) with GoRepYo LLC and has been PHI-enabled in RepYo:
-
-- You may enter, access, and transmit PHI only as authorized by your organization and as reasonably necessary to request representative support.
-- You are responsible for entering accurate information and verifying patient identity before submission.
-- You must not enter PHI when your organization is in Standard (non-PHI) mode.
-
-When your organization is **not** PHI-enabled, you must **not** submit patient-identifiable information.
-
-## 4. Minimum necessary and professional responsibility
-
-You agree to limit PHI to the minimum reasonably necessary for the rep request. You remain responsible for compliance with your organization's policies, applicable law, and professional standards.
-
-## 5. Security obligations
-
-You agree to:
-
-- Maintain the confidentiality of your login credentials
-- Use strong passwords and comply with MFA when enabled
-- Report suspected unauthorized access or security incidents promptly to your organization and RepYo
-- Not attempt to circumvent RepYo's access controls or audit systems
-
-## 6. Electronic records and signatures
-
-Your electronic acceptance of this Agreement constitutes your legal signature. RepYo maintains audit records of acceptance including your identity, organization, document version, and timestamp.
-
-## 7. Termination
-
-Your access may be suspended or terminated by your organization, RepYo, or upon violation of this Agreement. Provisions regarding audit, confidentiality, and permitted use of information survive termination.
-
-## 8. Disclaimer
-
-REPYO IS PROVIDED "AS IS." TO THE MAXIMUM EXTENT PERMITTED BY LAW, REPYO DISCLAIMS WARRANTIES AND LIMITS LIABILITY AS SET FORTH IN THE TERMS OF USE.
-
-## 9. Contact
-
-Questions regarding this Agreement: legal@gorepyo.com
-`,
+      "Healthcare Provider User Agreement v2.0 for authorized healthcare personnel using RepYo on behalf of a participating organization.",
+    content: PROVIDER_USER_AGREEMENT_CONTENT,
   },
   {
     slug: "phi-security-requirements",

@@ -10,6 +10,7 @@ import {
 import { recordAgreementAcceptances } from "@/lib/legal/acceptance";
 import {
   ACCOUNT_PRIVACY_SLUGS,
+  PROVIDER_ACCEPTANCE_SLUGS,
   authorizationSlugsForRole,
 } from "@/lib/legal/documents";
 import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
@@ -45,6 +46,12 @@ export async function completeSignup(params: {
     acceptProviderAuthorization,
     acceptProviderPrivacy,
     acceptTermsAndPrivacy,
+    acceptProviderOrgAuth,
+    acceptProviderUserAgreement,
+    acceptProviderPhiUse,
+    acceptProviderNotEmergency,
+    acceptProviderPrivacyAck,
+    acceptProviderElectronicComm,
     siteIds = [],
     primarySiteId,
     inviteToken,
@@ -148,16 +155,26 @@ export async function completeSignup(params: {
 
   const legalName = name.trim();
 
-  const acceptedBoth =
-    (acceptProviderAuthorization && acceptProviderPrivacy) ||
-    acceptTermsAndPrivacy;
+  const providerAcceptedAllSix =
+    Boolean(acceptProviderOrgAuth) &&
+    Boolean(acceptProviderUserAgreement) &&
+    Boolean(acceptProviderPhiUse) &&
+    Boolean(acceptProviderNotEmergency) &&
+    Boolean(acceptProviderPrivacyAck) &&
+    Boolean(acceptProviderElectronicComm);
 
-  if (acceptedBoth) {
+  const acceptedAgreements =
+    role === "PROVIDER"
+      ? providerAcceptedAllSix
+      : Boolean(acceptProviderAuthorization && acceptProviderPrivacy) ||
+        Boolean(acceptTermsAndPrivacy);
+
+  if (acceptedAgreements) {
     await syncLegalDocumentsFromCode();
-    const slugs = [
-      ...authorizationSlugsForRole(role),
-      ...ACCOUNT_PRIVACY_SLUGS,
-    ];
+    const slugs =
+      role === "PROVIDER"
+        ? [...PROVIDER_ACCEPTANCE_SLUGS]
+        : [...authorizationSlugsForRole(role), ...ACCOUNT_PRIVACY_SLUGS];
     await recordAgreementAcceptances([...new Set(slugs)], {
       userId: user.id,
       legalName,

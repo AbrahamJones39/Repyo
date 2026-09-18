@@ -44,6 +44,18 @@ export async function signupAction(formData: FormData) {
       formData.get("acceptProviderPrivacy") === "true" || undefined,
     acceptTermsAndPrivacy:
       formData.get("acceptTermsAndPrivacy") === "true" || undefined,
+    acceptProviderOrgAuth:
+      formData.get("acceptProviderOrgAuth") === "true" || undefined,
+    acceptProviderUserAgreement:
+      formData.get("acceptProviderUserAgreement") === "true" || undefined,
+    acceptProviderPhiUse:
+      formData.get("acceptProviderPhiUse") === "true" || undefined,
+    acceptProviderNotEmergency:
+      formData.get("acceptProviderNotEmergency") === "true" || undefined,
+    acceptProviderPrivacyAck:
+      formData.get("acceptProviderPrivacyAck") === "true" || undefined,
+    acceptProviderElectronicComm:
+      formData.get("acceptProviderElectronicComm") === "true" || undefined,
     siteIds: formData.get("siteIds") || undefined,
     primarySiteId: formData.get("primarySiteId") || undefined,
     inviteToken: formData.get("inviteToken") || undefined,
@@ -76,6 +88,12 @@ export async function signupAction(formData: FormData) {
     acceptProviderAuthorization,
     acceptProviderPrivacy,
     acceptTermsAndPrivacy,
+    acceptProviderOrgAuth,
+    acceptProviderUserAgreement,
+    acceptProviderPhiUse,
+    acceptProviderNotEmergency,
+    acceptProviderPrivacyAck,
+    acceptProviderElectronicComm,
     siteIds: siteIdsRaw,
     primarySiteId,
     inviteToken,
@@ -282,6 +300,12 @@ export async function signupAction(formData: FormData) {
       acceptProviderAuthorization,
       acceptProviderPrivacy,
       acceptTermsAndPrivacy,
+      acceptProviderOrgAuth,
+      acceptProviderUserAgreement,
+      acceptProviderPhiUse,
+      acceptProviderNotEmergency,
+      acceptProviderPrivacyAck,
+      acceptProviderElectronicComm,
       siteIds,
       primarySiteId,
       inviteToken: inviteToken?.trim() ?? null,
@@ -340,6 +364,12 @@ export async function signupAction(formData: FormData) {
       acceptProviderAuthorization,
       acceptProviderPrivacy,
       acceptTermsAndPrivacy,
+      acceptProviderOrgAuth,
+      acceptProviderUserAgreement,
+      acceptProviderPhiUse,
+      acceptProviderNotEmergency,
+      acceptProviderPrivacyAck,
+      acceptProviderElectronicComm,
       siteIds,
       primarySiteId,
       inviteToken: inviteToken?.trim() ?? null,

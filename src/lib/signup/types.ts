@@ -19,6 +19,12 @@ export type SignupPayload = {
   acceptProviderAuthorization?: boolean;
   acceptProviderPrivacy?: boolean;
   acceptTermsAndPrivacy?: boolean;
+  acceptProviderOrgAuth?: boolean;
+  acceptProviderUserAgreement?: boolean;
+  acceptProviderPhiUse?: boolean;
+  acceptProviderNotEmergency?: boolean;
+  acceptProviderPrivacyAck?: boolean;
+  acceptProviderElectronicComm?: boolean;
   siteIds?: string[];
   primarySiteId?: string | null;
   inviteToken?: string | null;
