@@ -8,8 +8,10 @@ import {
 } from "@/components/shared/facility-search-picker";
 import {
   LegalDocumentModal,
-  ProviderAgreementSection,
-  RepAgreementSection,
+  AccountAgreementSection,
+  ProviderAccountAgreementSection,
+  EMPTY_PROVIDER_AGREEMENT_CHECKS,
+  allProviderChecksAccepted,
 } from "@/components/legal/legal-document-modal";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -77,10 +79,14 @@ export function SignupForm() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [requestOrgAccess, setRequestOrgAccess] = useState(false);
-  const [acceptProviderAuthorization, setAcceptProviderAuthorization] =
+  const [acceptAuthorizedUse, setAcceptAuthorizedUse] = useState(false);
+  const [acceptPrivacyCommunications, setAcceptPrivacyCommunications] =
     useState(false);
-  const [acceptProviderPrivacy, setAcceptProviderPrivacy] = useState(false);
-  const [acceptTermsAndPrivacy, setAcceptTermsAndPrivacy] = useState(false);
+  const [acceptOrgAdminAcknowledgment, setAcceptOrgAdminAcknowledgment] =
+    useState(false);
+  const [providerChecks, setProviderChecks] = useState(
+    EMPTY_PROVIDER_AGREEMENT_CHECKS
+  );
   const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
@@ -152,9 +158,10 @@ export function SignupForm() {
 
   useEffect(() => {
     setProviderStep(1);
-    setAcceptProviderAuthorization(false);
-    setAcceptProviderPrivacy(false);
-    setAcceptTermsAndPrivacy(false);
+    setAcceptAuthorizedUse(false);
+    setAcceptPrivacyCommunications(false);
+    setAcceptOrgAdminAcknowledgment(false);
+    setProviderChecks(EMPTY_PROVIDER_AGREEMENT_CHECKS);
     setSelectedSites([]);
     setError("");
   }, [role]);
@@ -198,7 +205,7 @@ export function SignupForm() {
       if (!values.requesterPhone?.trim()) return "Your phone number is required";
     }
     if (step === 4) {
-      if (!acceptProviderAuthorization || !acceptProviderPrivacy) {
+      if (!allProviderChecksAccepted(providerChecks)) {
         return "You must accept all required agreements before creating your account";
       }
     }
@@ -234,10 +241,53 @@ export function SignupForm() {
     form.set("requestOrgAccess", requestOrgAccess ? "true" : "false");
     form.set(
       "acceptProviderAuthorization",
-      acceptProviderAuthorization ? "true" : "false"
+      acceptAuthorizedUse ? "true" : "false"
     );
-    form.set("acceptProviderPrivacy", acceptProviderPrivacy ? "true" : "false");
-    form.set("acceptTermsAndPrivacy", acceptTermsAndPrivacy ? "true" : "false");
+    form.set(
+      "acceptProviderPrivacy",
+      acceptPrivacyCommunications ? "true" : "false"
+    );
+    form.set(
+      "acceptOrgAdminAcknowledgment",
+      acceptOrgAdminAcknowledgment ? "true" : "false"
+    );
+    const nonProviderAgreementsAccepted =
+      role === "COMPANY_ADMIN"
+        ? acceptAuthorizedUse &&
+          acceptPrivacyCommunications &&
+          acceptOrgAdminAcknowledgment
+        : acceptAuthorizedUse && acceptPrivacyCommunications;
+    form.set(
+      "acceptTermsAndPrivacy",
+      role === "PROVIDER"
+        ? allProviderChecksAccepted(providerChecks)
+          ? "true"
+          : "false"
+        : nonProviderAgreementsAccepted
+          ? "true"
+          : "false"
+    );
+    form.set(
+      "acceptProviderOrgAuth",
+      providerChecks.orgAuth ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderUserAgreement",
+      providerChecks.userAgreement ? "true" : "false"
+    );
+    form.set("acceptProviderPhiUse", providerChecks.phiUse ? "true" : "false");
+    form.set(
+      "acceptProviderNotEmergency",
+      providerChecks.notEmergency ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderPrivacyAck",
+      providerChecks.privacyAck ? "true" : "false"
+    );
+    form.set(
+      "acceptProviderElectronicComm",
+      providerChecks.electronicComm ? "true" : "false"
+    );
     if (selectedSites.length > 0) {
       form.set("siteIds", JSON.stringify(selectedSites.map((s) => s.id)));
       form.set("primarySiteId", selectedSites[0].id);
@@ -270,7 +320,7 @@ export function SignupForm() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-4 py-10">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <BrandMark size="lg" />
           <p className="mt-2 text-sm text-slate-600">
@@ -515,11 +565,9 @@ export function SignupForm() {
                 </p>
               </div>
 
-              <ProviderAgreementSection
-                acceptAuthorization={acceptProviderAuthorization}
-                acceptPrivacy={acceptProviderPrivacy}
-                onAcceptAuthorization={setAcceptProviderAuthorization}
-                onAcceptPrivacy={setAcceptProviderPrivacy}
+              <ProviderAccountAgreementSection
+                checks={providerChecks}
+                onChange={setProviderChecks}
                 onOpenDocument={setLegalDocSlug}
               />
 
@@ -651,9 +699,16 @@ export function SignupForm() {
                 />
               )}
 
-              <RepAgreementSection
-                accepted={acceptTermsAndPrivacy}
-                onAccept={setAcceptTermsAndPrivacy}
+              <AccountAgreementSection
+                role={role === "COMPANY_ADMIN" ? "COMPANY_ADMIN" : "REP"}
+                acceptAuthorization={acceptAuthorizedUse}
+                acceptPrivacy={acceptPrivacyCommunications}
+                onAcceptAuthorization={setAcceptAuthorizedUse}
+                onAcceptPrivacy={setAcceptPrivacyCommunications}
+                acceptOrgAdminAcknowledgment={acceptOrgAdminAcknowledgment}
+                onAcceptOrgAdminAcknowledgment={
+                  setAcceptOrgAdminAcknowledgment
+                }
                 onOpenDocument={setLegalDocSlug}
               />
             </>
@@ -677,8 +732,13 @@ export function SignupForm() {
                 loading ||
                 (role === "PROVIDER" &&
                   providerStep === 4 &&
-                  (!acceptProviderAuthorization || !acceptProviderPrivacy)) ||
-                (role !== "PROVIDER" && !acceptTermsAndPrivacy)
+                  !allProviderChecksAccepted(providerChecks)) ||
+                (role === "REP" &&
+                  (!acceptAuthorizedUse || !acceptPrivacyCommunications)) ||
+                (role === "COMPANY_ADMIN" &&
+                  (!acceptAuthorizedUse ||
+                    !acceptPrivacyCommunications ||
+                    !acceptOrgAdminAcknowledgment))
               }
             >
               {loading

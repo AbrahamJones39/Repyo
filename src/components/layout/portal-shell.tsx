@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import {
   Building2,
+  CircleUser,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -36,6 +37,7 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
       { href: "/provider/requests", label: "Requests", icon: <Stethoscope className="h-4 w-4" /> },
       { href: "/provider/facilities", label: "My Facilities", icon: <MapPin className="h-4 w-4" /> },
       { href: "/provider/favorites", label: "Favorite Reps", icon: <Users className="h-4 w-4" /> },
+      { href: "/provider/profile", label: "My Profile", icon: <CircleUser className="h-4 w-4" /> },
     ],
   },
   rep: {
@@ -46,6 +48,7 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
       { href: "/rep/facilities", label: "My Facilities", icon: <MapPin className="h-4 w-4" /> },
       { href: "/rep/teams", label: "Teams", icon: <Users className="h-4 w-4" /> },
       { href: "/rep/territory", label: "Territory", icon: <MapPin className="h-4 w-4" /> },
+      { href: "/rep/profile", label: "My Profile", icon: <CircleUser className="h-4 w-4" /> },
     ],
   },
   company: {
@@ -60,6 +63,7 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
       { href: "/company/teams", label: "Teams", icon: <Users className="h-4 w-4" /> },
       { href: "/company/schedule", label: "Calendar", icon: <Calendar className="h-4 w-4" /> },
       { href: "/company/analytics", label: "Analytics", icon: <Building2 className="h-4 w-4" /> },
+      { href: "/company/profile", label: "My Profile", icon: <CircleUser className="h-4 w-4" /> },
     ],
   },
   admin: {
@@ -70,6 +74,7 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
       { href: "/admin/organizations", label: "Provider Orgs", icon: <Stethoscope className="h-4 w-4" /> },
       { href: "/admin/security", label: "Security", icon: <Building2 className="h-4 w-4" /> },
       { href: "/admin/users", label: "Users", icon: <Users className="h-4 w-4" /> },
+      { href: "/admin/profile", label: "My Profile", icon: <CircleUser className="h-4 w-4" /> },
     ],
   },
 };

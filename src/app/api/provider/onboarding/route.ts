@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { recordAgreementAcceptances } from "@/lib/legal/acceptance";
+import { PROVIDER_ACCEPTANCE_SLUGS } from "@/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
 import { providerOnboardingSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 
@@ -151,9 +154,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    if (!data.acceptTerms || !data.acceptUserAgreement) {
+    const acceptedAllSix =
+      Boolean(data.acceptProviderOrgAuth) &&
+      Boolean(data.acceptProviderUserAgreement) &&
+      Boolean(data.acceptProviderPhiUse) &&
+      Boolean(data.acceptProviderNotEmergency) &&
+      Boolean(data.acceptProviderPrivacyAck) &&
+      Boolean(data.acceptProviderElectronicComm);
+
+    if (!acceptedAllSix) {
       return NextResponse.json(
-        { error: "You must accept GoRepYo agreements to continue" },
+        { error: "You must accept all required RepYo agreements to continue" },
         { status: 400 }
       );
     }
@@ -166,6 +177,17 @@ export async function POST(request: Request) {
     const needsOrgApproval =
       profile.organization?.status === "PENDING" ||
       profile.organization?.status === "VERIFIED";
+
+    await syncLegalDocumentsFromCode();
+    await recordAgreementAcceptances([...PROVIDER_ACCEPTANCE_SLUGS], {
+      userId,
+      legalName: session.user.name ?? "Healthcare Provider",
+      role: "PROVIDER",
+      organizationId: profile.organizationId,
+      organizationName: profile.organization?.name ?? null,
+      facilityName: profile.facilityName,
+      signatureText: `${session.user.name ?? "Healthcare Provider"} — onboarding acceptance`,
+    });
 
     await db.providerProfile.update({
       where: { userId },

@@ -1,7 +1,7 @@
 import { PrismaClient, RequestStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { encryptPHI, encryptDate } from "../src/lib/encryption";
-import { LEGAL_DOCUMENTS } from "../src/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "../src/lib/legal/sync-documents";
 import { importHealthcareSitesFromJson, linkSiteToOrganization } from "../src/lib/healthcare-sites/service";
 import type { HealthcareSiteInput } from "../src/lib/healthcare-sites/normalize";
 import arizonaSites from "../data/arizona-healthcare-sites.json";
@@ -175,29 +175,8 @@ async function logStatus(
 }
 
 async function seedLegalDocuments() {
-  for (const doc of LEGAL_DOCUMENTS) {
-    await db.legalDocument.upsert({
-      where: { slug: doc.slug },
-      create: {
-        slug: doc.slug,
-        title: doc.title,
-        version: doc.version,
-        roleScopes: doc.roleScopes,
-        summary: doc.summary,
-        content: doc.content,
-        active: true,
-      },
-      update: {
-        title: doc.title,
-        version: doc.version,
-        roleScopes: doc.roleScopes,
-        summary: doc.summary,
-        content: doc.content,
-        active: true,
-      },
-    });
-  }
-  console.log(`Seeded ${LEGAL_DOCUMENTS.length} legal documents`);
+  await syncLegalDocumentsFromCode();
+  console.log("Seeded legal documents from code");
 }
 
 async function main() {

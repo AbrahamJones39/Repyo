@@ -1,4 +1,24 @@
 import type { Role } from "@prisma/client";
+import {
+  TERMS_OF_USE_CONTENT,
+  TERMS_OF_USE_VERSION,
+} from "@/lib/legal/terms-of-use-v2";
+import {
+  PRIVACY_POLICY_CONTENT,
+  PRIVACY_POLICY_VERSION,
+} from "@/lib/legal/privacy-policy-v2";
+import {
+  REP_USER_AGREEMENT_CONTENT,
+  REP_USER_AGREEMENT_VERSION,
+} from "@/lib/legal/rep-user-agreement-v2";
+import {
+  PROVIDER_USER_AGREEMENT_CONTENT,
+  PROVIDER_USER_AGREEMENT_VERSION,
+} from "@/lib/legal/provider-user-agreement-v2";
+import {
+  ORGANIZATION_ADMIN_ACKNOWLEDGMENT_CONTENT,
+  ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION,
+} from "@/lib/legal/organization-admin-acknowledgment";
 
 export const LEGAL_DOCUMENT_VERSION = "1.0.0";
 
@@ -18,9 +38,17 @@ export const PROVIDER_REQUIRED_SLUGS = [
   "terms-of-use",
 ] as const;
 
-export const REP_REQUIRED_SLUGS = ["terms-of-use", "privacy-policy"] as const;
+export const REP_REQUIRED_SLUGS = [
+  "terms-of-use",
+  "privacy-policy",
+  "rep-user-agreement",
+] as const;
 
-export const COMPANY_ADMIN_REQUIRED_SLUGS = ["terms-of-use", "privacy-policy"] as const;
+export const COMPANY_ADMIN_REQUIRED_SLUGS = [
+  "terms-of-use",
+  "privacy-policy",
+  "organization-admin-acknowledgment",
+] as const;
 
 export function requiredSlugsForRole(role: Role): readonly string[] {
   if (role === "PROVIDER") return PROVIDER_REQUIRED_SLUGS;
@@ -29,78 +57,67 @@ export function requiredSlugsForRole(role: Role): readonly string[] {
   return [];
 }
 
-/** Checkbox 1 → these documents */
+export function userAgreementSlugForRole(role: Role): string {
+  if (role === "PROVIDER") return "provider-user-agreement";
+  if (role === "REP") return "rep-user-agreement";
+  return "terms-of-use";
+}
+
+/** Rep/Admin checkbox 1 — authorization, terms, and role-specific user agreement */
+export function authorizationSlugsForRole(role: Role): readonly string[] {
+  if (role === "PROVIDER") {
+    return ["terms-of-use", "provider-user-agreement", "phi-security-requirements"];
+  }
+  if (role === "REP") {
+    return ["terms-of-use", "rep-user-agreement"];
+  }
+  if (role === "COMPANY_ADMIN") {
+    return ["terms-of-use", "organization-admin-acknowledgment"];
+  }
+  return ["terms-of-use"];
+}
+
+/** Rep/Admin checkbox 2 — privacy policy */
+export const ACCOUNT_PRIVACY_SLUGS = ["privacy-policy"] as const;
+
+/**
+ * Provider recorded slugs when all six checkboxes are accepted:
+ * checkbox 2 → provider-user-agreement, checkbox 5 → privacy-policy,
+ * terms-of-use (shown in the Account Agreement box),
+ * phi-security-requirements (tied to PHI checkbox 3; not shown as an embed).
+ */
+export const PROVIDER_ACCEPTANCE_SLUGS = PROVIDER_REQUIRED_SLUGS;
+
+export const PROVIDER_AGREEMENT_FIELD_KEYS = [
+  "acceptProviderOrgAuth",
+  "acceptProviderUserAgreement",
+  "acceptProviderPhiUse",
+  "acceptProviderNotEmergency",
+  "acceptProviderPrivacyAck",
+  "acceptProviderElectronicComm",
+] as const;
+
+export type ProviderAgreementFieldKey =
+  (typeof PROVIDER_AGREEMENT_FIELD_KEYS)[number];
+
+/** Checkbox 2 → provider-user-agreement; checkbox 3 also records phi-security-requirements */
 export const PROVIDER_AUTHORIZATION_SLUGS = [
   "provider-user-agreement",
   "phi-security-requirements",
 ] as const;
 
-/** Checkbox 2 → these documents */
+/** Checkbox 5 → privacy-policy; terms-of-use is also recorded because it is shown in the box */
 export const PROVIDER_PRIVACY_SLUGS = ["privacy-policy", "terms-of-use"] as const;
 
 export const LEGAL_DOCUMENTS: LegalDocDefinition[] = [
   {
     slug: "provider-user-agreement",
     title: "RepYo Healthcare Provider User Agreement",
-    version: LEGAL_DOCUMENT_VERSION,
+    version: PROVIDER_USER_AGREEMENT_VERSION,
     roleScopes: ["PROVIDER"],
     summary:
-      "Individual clickwrap agreement for authorized healthcare workers using RepYo on behalf of a covered entity.",
-    content: `# RepYo Healthcare Provider User Agreement
-
-**Version ${LEGAL_DOCUMENT_VERSION} · GoRepYo LLC**
-
-## 1. Parties and purpose
-
-This Healthcare Provider User Agreement ("Agreement") is between you, an individual authorized healthcare worker, and GoRepYo LLC ("RepYo," "we," "us"). RepYo provides a representative-support request and scheduling platform. RepYo is **not** an emergency service, electronic health record, or substitute for your organization's clinical communication systems.
-
-## 2. Your authorization
-
-You represent and warrant that:
-
-- You are employed by or otherwise authorized by the healthcare organization identified in your account to use RepYo for legitimate professional purposes.
-- You will use RepYo only within the scope of your professional duties and organizational policies.
-- You will not share your credentials or allow unauthorized persons to access RepYo using your account.
-
-## 3. Protected health information (PHI)
-
-When your organization has executed a Business Associate Agreement (BAA) with GoRepYo LLC and has been PHI-enabled in RepYo:
-
-- You may enter, access, and transmit PHI only as authorized by your organization and as reasonably necessary to request representative support.
-- You are responsible for entering accurate information and verifying patient identity before submission.
-- You must not enter PHI when your organization is in Standard (non-PHI) mode.
-
-When your organization is **not** PHI-enabled, you must **not** submit patient-identifiable information.
-
-## 4. Minimum necessary and professional responsibility
-
-You agree to limit PHI to the minimum reasonably necessary for the rep request. You remain responsible for compliance with your organization's policies, applicable law, and professional standards.
-
-## 5. Security obligations
-
-You agree to:
-
-- Maintain the confidentiality of your login credentials
-- Use strong passwords and comply with MFA when enabled
-- Report suspected unauthorized access or security incidents promptly to your organization and RepYo
-- Not attempt to circumvent RepYo's access controls or audit systems
-
-## 6. Electronic records and signatures
-
-Your electronic acceptance of this Agreement constitutes your legal signature. RepYo maintains audit records of acceptance including your identity, organization, document version, and timestamp.
-
-## 7. Termination
-
-Your access may be suspended or terminated by your organization, RepYo, or upon violation of this Agreement. Provisions regarding audit, confidentiality, and permitted use of information survive termination.
-
-## 8. Disclaimer
-
-REPYO IS PROVIDED "AS IS." TO THE MAXIMUM EXTENT PERMITTED BY LAW, REPYO DISCLAIMS WARRANTIES AND LIMITS LIABILITY AS SET FORTH IN THE TERMS OF USE.
-
-## 9. Contact
-
-Questions regarding this Agreement: legal@gorepyo.com
-`,
+      "Healthcare Provider User Agreement v2.0 for authorized healthcare personnel using RepYo on behalf of a participating organization.",
+    content: PROVIDER_USER_AGREEMENT_CONTENT,
   },
   {
     slug: "phi-security-requirements",
@@ -152,94 +169,37 @@ Enterprise HIPAA obligations (including BAA execution) are between your healthca
   {
     slug: "privacy-policy",
     title: "RepYo Privacy Policy",
-    version: LEGAL_DOCUMENT_VERSION,
-    roleScopes: ["PROVIDER", "REP", "COMPANY_ADMIN"],
-    summary: "How RepYo collects, uses, and protects personal information.",
-    content: `# RepYo Privacy Policy
-
-**Version ${LEGAL_DOCUMENT_VERSION} · GoRepYo LLC**
-
-## Information we collect
-
-- **Account information:** name, email, phone, role, organization affiliation
-- **Professional information:** facility, department, territory (as applicable)
-- **Usage and audit data:** login events, agreement acceptances, access logs (without unnecessary duplication of PHI in logs)
-- **PHI:** only when submitted by authorized users of PHI-enabled organizations, encrypted at rest
-
-## How we use information
-
-- Provide request routing, scheduling, and representative coordination
-- Send service notifications (without patient identifiers in alert content)
-- Maintain security, audit trails, and legal compliance records
-- Improve platform reliability and support
-
-## Electronic communications
-
-By creating an account, you consent to receive electronic service communications including security notices, scheduling updates, and request notifications via email and in-app alerts.
-
-## Sharing
-
-We do not sell personal information. We share data with:
-
-- Your healthcare organization (for provider users)
-- Device manufacturer teams you request support from
-- Service providers under contract (hosting, email) subject to appropriate safeguards
-- As required by law
-
-## Retention
-
-We retain account and audit records according to organizational agreements and legal requirements. PHI retention follows BAA terms and secure destruction procedures.
-
-## Your rights
-
-Contact privacy@gorepyo.com for access, correction, or deletion requests subject to legal and contractual obligations.
-
-## Contact
-
-GoRepYo LLC · privacy@gorepyo.com
-`,
+    version: PRIVACY_POLICY_VERSION,
+    roleScopes: ["PROVIDER", "REP", "COMPANY_ADMIN", "SUPER_ADMIN"],
+    summary:
+      "Privacy Policy v2.0 explaining how GoRepYo collects, uses, discloses, and protects information on the RepYo platform.",
+    content: PRIVACY_POLICY_CONTENT,
   },
   {
     slug: "terms-of-use",
     title: "RepYo Terms of Use",
-    version: LEGAL_DOCUMENT_VERSION,
-    roleScopes: ["PROVIDER", "REP", "COMPANY_ADMIN"],
-    summary: "Platform terms governing use of GoRepYo services.",
-    content: `# RepYo Terms of Use
-
-**Version ${LEGAL_DOCUMENT_VERSION} · GoRepYo LLC**
-
-## 1. Service description
-
-GoRepYo connects healthcare providers with medical device representatives for support requests and scheduling. RepYo is not for medical emergencies. Call 911 or use your organization's emergency protocols for urgent clinical situations.
-
-## 2. Acceptable use
-
-You agree to use RepYo lawfully and professionally. You may not misuse the platform, attempt unauthorized access, or interfere with other users.
-
-## 3. Accounts
-
-You are responsible for account security. RepYo may suspend accounts for security incidents, policy violations, or at organization request.
-
-## 4. Intellectual property
-
-RepYo and its content are owned by GoRepYo LLC. You receive a limited license to use the platform for its intended purpose.
-
-## 5. Limitation of liability
-
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, REPYO'S LIABILITY IS LIMITED. REPYO IS NOT LIABLE FOR CLINICAL DECISIONS, DEVICE OUTCOMES, OR EMERGENCY SITUATIONS.
-
-## 6. Changes
-
-We may update these Terms. Material changes will require renewed acceptance where legally required.
-
-## 7. Governing law
-
-These Terms are governed by the laws of the State of Delaware, without regard to conflict-of-law principles.
-
-## Contact
-
-legal@gorepyo.com
-`,
+    version: TERMS_OF_USE_VERSION,
+    roleScopes: ["PROVIDER", "REP", "COMPANY_ADMIN", "SUPER_ADMIN"],
+    summary:
+      "Terms of Use v2.0 governing access to the RepYo website, mobile application, and platform.",
+    content: TERMS_OF_USE_CONTENT,
+  },
+  {
+    slug: "rep-user-agreement",
+    title: "RepYo Medical Device Representative User Agreement",
+    version: REP_USER_AGREEMENT_VERSION,
+    roleScopes: ["REP"],
+    summary:
+      "Individual clickwrap agreement for authorized medical device representatives using RepYo.",
+    content: REP_USER_AGREEMENT_CONTENT,
+  },
+  {
+    slug: "organization-admin-acknowledgment",
+    title: "RepYo Organization Administrator Acknowledgment",
+    version: ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION,
+    roleScopes: ["COMPANY_ADMIN"],
+    summary:
+      "Organization Administrator Acknowledgment for individuals granted administrative privileges within RepYo.",
+    content: ORGANIZATION_ADMIN_ACKNOWLEDGMENT_CONTENT,
   },
 ];

@@ -118,19 +118,143 @@ function DocLink({
   );
 }
 
-export function ProviderAgreementSection({
-  acceptAuthorization,
-  acceptPrivacy,
-  onAcceptAuthorization,
-  onAcceptPrivacy,
-  onOpenDocument,
+function LegalDocumentEmbed({
+  slug,
+  onOpen,
 }: {
-  acceptAuthorization: boolean;
-  acceptPrivacy: boolean;
-  onAcceptAuthorization: (v: boolean) => void;
-  onAcceptPrivacy: (v: boolean) => void;
-  onOpenDocument: (slug: string) => void;
+  slug: string;
+  onOpen: (slug: string) => void;
 }) {
+  const [doc, setDoc] = useState<{
+    title: string;
+    version: string;
+    content: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/legal/${slug}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setDoc(data);
+      })
+      .catch(() => {
+        if (!cancelled) setDoc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-3 py-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            {doc?.title ?? (loading ? "Loading document..." : "Could not load document")}
+          </p>
+          {doc?.version && (
+            <p className="text-xs text-slate-500">Version {doc.version}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpen(slug)}
+          className="shrink-0 text-xs font-medium text-rose-600 underline hover:text-rose-700"
+        >
+          Expand
+        </button>
+      </div>
+      <div className="max-h-52 overflow-y-auto px-3 py-2">
+        {loading ? (
+          <p className="text-xs text-slate-500">Loading...</p>
+        ) : doc ? (
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700">
+            {doc.content.replace(/^#+\s/gm, "").trim()}
+          </pre>
+        ) : (
+          <p className="text-xs text-red-600">Could not load this document.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export type ProviderAgreementChecks = {
+  orgAuth: boolean;
+  userAgreement: boolean;
+  phiUse: boolean;
+  notEmergency: boolean;
+  privacyAck: boolean;
+  electronicComm: boolean;
+};
+
+export const EMPTY_PROVIDER_AGREEMENT_CHECKS: ProviderAgreementChecks = {
+  orgAuth: false,
+  userAgreement: false,
+  phiUse: false,
+  notEmergency: false,
+  privacyAck: false,
+  electronicComm: false,
+};
+
+export function allProviderChecksAccepted(checks: ProviderAgreementChecks) {
+  return (
+    checks.orgAuth &&
+    checks.userAgreement &&
+    checks.phiUse &&
+    checks.notEmergency &&
+    checks.privacyAck &&
+    checks.electronicComm
+  );
+}
+
+function AgreementCheckbox({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex items-start gap-3 text-sm text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1"
+        required
+      />
+      <span>{children}</span>
+    </label>
+  );
+}
+
+export function ProviderAccountAgreementSection({
+  checks,
+  onChange,
+  onOpenDocument,
+  ctaHint = "create your account",
+}: {
+  checks: ProviderAgreementChecks;
+  onChange: (next: ProviderAgreementChecks) => void;
+  onOpenDocument: (slug: string) => void;
+  ctaHint?: string;
+}) {
+  function setCheck<K extends keyof ProviderAgreementChecks>(
+    key: K,
+    value: boolean
+  ) {
+    onChange({ ...checks, [key]: value });
+  }
+
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div>
@@ -138,64 +262,189 @@ export function ProviderAgreementSection({
           Account Agreement
         </h3>
         <p className="mt-1 text-xs text-slate-600">
-          Read each document before accepting. Account creation requires all
-          agreements below.
+          Read the Terms of Use, Privacy Policy, and Healthcare Provider User
+          Agreement below, then accept all acknowledgements to {ctaHint}.
         </p>
       </div>
 
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={acceptAuthorization}
-          onChange={(e) => onAcceptAuthorization(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I confirm that I am authorized by the healthcare organization identified
-          above to use RepYo. I have read and agree to the{" "}
-          <DocLink slug="provider-user-agreement" onOpen={onOpenDocument}>
-            RepYo Healthcare Provider User Agreement
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="phi-security-requirements" onOpen={onOpenDocument}>
-            PHI, Privacy &amp; Security Requirements
-          </DocLink>
-          , and acknowledge that I am responsible for entering, accessing, and
-          sharing patient information only as authorized and reasonably necessary
-          for legitimate professional purposes.
-        </span>
-      </label>
+      <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
+      <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
+      <LegalDocumentEmbed
+        slug="provider-user-agreement"
+        onOpen={onOpenDocument}
+      />
 
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={acceptPrivacy}
-          onChange={(e) => onAcceptPrivacy(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I acknowledge the{" "}
-          <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-            RepYo Privacy Policy
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
-            Terms of Use
-          </DocLink>{" "}
-          and consent to electronic service, security, scheduling, and request
-          notifications.
-        </span>
-      </label>
+      <AgreementCheckbox
+        checked={checks.orgAuth}
+        onChange={(v) => setCheck("orgAuth", v)}
+      >
+        I confirm that I am authorized by the healthcare organization identified
+        above to use RepYo for legitimate professional purposes.
+      </AgreementCheckbox>
 
-      <p className="text-xs leading-relaxed text-slate-500">
-        By creating an account, you understand that RepYo is a
-        representative-support request and scheduling platform. RepYo is not an
-        emergency service, electronic health record, or substitute for your
-        organization&apos;s clinical communication systems.
-      </p>
+      <AgreementCheckbox
+        checked={checks.userAgreement}
+        onChange={(v) => setCheck("userAgreement", v)}
+      >
+        I agree to the{" "}
+        <DocLink slug="provider-user-agreement" onOpen={onOpenDocument}>
+          RepYo healthcare provider user agreement
+        </DocLink>
+        .
+      </AgreementCheckbox>
+
+      <AgreementCheckbox
+        checked={checks.phiUse}
+        onChange={(v) => setCheck("phiUse", v)}
+      >
+        I understand that RepYo may contain protected health information and
+        agree to access, enter, use, and disclose patient information only as
+        authorized and reasonably necessary for legitimate professional
+        purposes.
+      </AgreementCheckbox>
+
+      <AgreementCheckbox
+        checked={checks.notEmergency}
+        onChange={(v) => setCheck("notEmergency", v)}
+      >
+        I understand that RepYo is for representative support requests and is
+        not an emergency service, electronic health record, or substitute for my
+        organization&apos;s clinical communication system.
+      </AgreementCheckbox>
+
+      <AgreementCheckbox
+        checked={checks.privacyAck}
+        onChange={(v) => setCheck("privacyAck", v)}
+      >
+        I acknowledge that I have been provided access to the{" "}
+        <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
+          RepYo privacy policy
+        </DocLink>
+        .
+      </AgreementCheckbox>
+
+      <AgreementCheckbox
+        checked={checks.electronicComm}
+        onChange={(v) => setCheck("electronicComm", v)}
+      >
+        I consent to electronic service, security, scheduling, request status,
+        and account communication from RepYo.
+      </AgreementCheckbox>
     </div>
+  );
+}
+
+export function AccountAgreementSection({
+  role,
+  acceptAuthorization,
+  acceptPrivacy,
+  onAcceptAuthorization,
+  onAcceptPrivacy,
+  onOpenDocument,
+  acceptOrgAdminAcknowledgment = false,
+  onAcceptOrgAdminAcknowledgment,
+}: {
+  role: "REP" | "COMPANY_ADMIN";
+  acceptAuthorization: boolean;
+  acceptPrivacy: boolean;
+  onAcceptAuthorization: (v: boolean) => void;
+  onAcceptPrivacy: (v: boolean) => void;
+  onOpenDocument: (slug: string) => void;
+  acceptOrgAdminAcknowledgment?: boolean;
+  onAcceptOrgAdminAcknowledgment?: (v: boolean) => void;
+}) {
+  const userAgreementSlug =
+    role === "REP" ? "rep-user-agreement" : "terms-of-use";
+
+  return (
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Account Agreement
+        </h3>
+        <p className="mt-1 text-xs text-slate-600">
+          {role === "REP"
+            ? "Read the Terms of Use, Privacy Policy, and Medical Device Representative User Agreement below, then accept both acknowledgements to create your account."
+            : "Read the Terms of Use, Privacy Policy, and Organization Administrator Acknowledgment below, then accept all acknowledgements to create your account."}
+        </p>
+      </div>
+
+      <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
+      <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
+      {role === "REP" && (
+        <LegalDocumentEmbed slug="rep-user-agreement" onOpen={onOpenDocument} />
+      )}
+      {role === "COMPANY_ADMIN" && (
+        <LegalDocumentEmbed
+          slug="organization-admin-acknowledgment"
+          onOpen={onOpenDocument}
+        />
+      )}
+
+      <AgreementCheckbox
+        checked={acceptAuthorization}
+        onChange={onAcceptAuthorization}
+      >
+        I confirm that I am authorized to use RepYo and agree to the{" "}
+        <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
+          RepYo terms of use
+        </DocLink>{" "}
+        and the{" "}
+        <DocLink slug={userAgreementSlug} onOpen={onOpenDocument}>
+          user agreement applicable to my account type
+        </DocLink>
+        . I understand that RepYo may involve confidential healthcare information
+        and that I may access or use such information only for authorized
+        purposes.
+      </AgreementCheckbox>
+
+      <AgreementCheckbox checked={acceptPrivacy} onChange={onAcceptPrivacy}>
+        I acknowledge that I have been provided access to the{" "}
+        <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
+          RepYo privacy policy
+        </DocLink>{" "}
+        and consent to necessary electronic account security, requests,
+        scheduling, and service communication.
+      </AgreementCheckbox>
+
+      {role === "COMPANY_ADMIN" && onAcceptOrgAdminAcknowledgment && (
+        <AgreementCheckbox
+          checked={acceptOrgAdminAcknowledgment}
+          onChange={onAcceptOrgAdminAcknowledgment}
+        >
+          I confirm that I am authorized by the organization identified above to
+          act as a RepYo organization administrator. I have read and agree to
+          the RepYo{" "}
+          <DocLink
+            slug="organization-admin-acknowledgment"
+            onOpen={onOpenDocument}
+          >
+            organization administrator acknowledgment
+          </DocLink>{" "}
+          and understand that my administrator privileges must be used only for
+          authorized organizational purposes, including appropriately managing
+          user access and protecting confidential information and PHI.
+        </AgreementCheckbox>
+      )}
+    </div>
+  );
+}
+
+export function ProviderAgreementSection({
+  checks,
+  onChange,
+  onOpenDocument,
+}: {
+  checks: ProviderAgreementChecks;
+  onChange: (next: ProviderAgreementChecks) => void;
+  onOpenDocument: (slug: string) => void;
+}) {
+  return (
+    <ProviderAccountAgreementSection
+      checks={checks}
+      onChange={onChange}
+      onOpenDocument={onOpenDocument}
+    />
   );
 }
 
@@ -209,30 +458,13 @@ export function RepAgreementSection({
   onOpenDocument: (slug: string) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Account Agreement
-      </h3>
-      <label className="flex items-start gap-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={accepted}
-          onChange={(e) => onAccept(e.target.checked)}
-          className="mt-1"
-          required
-        />
-        <span>
-          I have read and agree to the{" "}
-          <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
-            Terms of Use
-          </DocLink>{" "}
-          and{" "}
-          <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-            Privacy Policy
-          </DocLink>
-          .
-        </span>
-      </label>
-    </div>
+    <AccountAgreementSection
+      role="REP"
+      acceptAuthorization={accepted}
+      acceptPrivacy={accepted}
+      onAcceptAuthorization={onAccept}
+      onAcceptPrivacy={onAccept}
+      onOpenDocument={onOpenDocument}
+    />
   );
 }

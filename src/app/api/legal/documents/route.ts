@@ -1,8 +1,10 @@
 import { db } from "@/lib/db";
 import { LEGAL_DOCUMENTS } from "@/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  await syncLegalDocumentsFromCode();
   const docs = await db.legalDocument.findMany({
     where: { active: true },
     select: {

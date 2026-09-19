@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { db } from "@/lib/db";
 import { LEGAL_DOCUMENTS } from "@/lib/legal/documents";
+import { syncLegalDocumentsFromCode } from "@/lib/legal/sync-documents";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -47,6 +48,7 @@ function renderMarkdown(content: string) {
 
 export default async function LegalDocumentPage({ params }: PageProps) {
   const { slug } = await params;
+  await syncLegalDocumentsFromCode();
 
   const doc =
     (await db.legalDocument.findFirst({

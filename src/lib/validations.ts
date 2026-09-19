@@ -308,6 +308,12 @@ export const providerOnboardingSchema = z.object({
   facilityId: z.string().uuid().optional(),
   acceptTerms: z.boolean().optional(),
   acceptUserAgreement: z.boolean().optional(),
+  acceptProviderOrgAuth: z.boolean().optional(),
+  acceptProviderUserAgreement: z.boolean().optional(),
+  acceptProviderPhiUse: z.boolean().optional(),
+  acceptProviderNotEmergency: z.boolean().optional(),
+  acceptProviderPrivacyAck: z.boolean().optional(),
+  acceptProviderElectronicComm: z.boolean().optional(),
 });
 
 export const createNonPhiRequestSchema = z
@@ -394,7 +400,14 @@ export const signupSchema = z
     requestOrgAccess: z.boolean().optional(),
     acceptProviderAuthorization: z.boolean().optional(),
     acceptProviderPrivacy: z.boolean().optional(),
+    acceptOrgAdminAcknowledgment: z.boolean().optional(),
     acceptTermsAndPrivacy: z.boolean().optional(),
+    acceptProviderOrgAuth: z.boolean().optional(),
+    acceptProviderUserAgreement: z.boolean().optional(),
+    acceptProviderPhiUse: z.boolean().optional(),
+    acceptProviderNotEmergency: z.boolean().optional(),
+    acceptProviderPrivacyAck: z.boolean().optional(),
+    acceptProviderElectronicComm: z.boolean().optional(),
     siteIds: z.string().optional(),
     primarySiteId: z.string().uuid().optional(),
     inviteToken: z.string().optional(),
@@ -454,26 +467,128 @@ export const signupSchema = z
       }
     }
     if (data.role === "PROVIDER") {
+      const providerChecks = [
+        {
+          key: "acceptProviderOrgAuth" as const,
+          message:
+            "You must confirm you are authorized by the healthcare organization identified above",
+        },
+        {
+          key: "acceptProviderUserAgreement" as const,
+          message:
+            "You must agree to the RepYo healthcare provider user agreement",
+        },
+        {
+          key: "acceptProviderPhiUse" as const,
+          message:
+            "You must acknowledge the protected health information requirements",
+        },
+        {
+          key: "acceptProviderNotEmergency" as const,
+          message:
+            "You must acknowledge that RepYo is not an emergency service, EHR, or substitute for clinical communication",
+        },
+        {
+          key: "acceptProviderPrivacyAck" as const,
+          message:
+            "You must acknowledge that you have been provided access to the RepYo privacy policy",
+        },
+        {
+          key: "acceptProviderElectronicComm" as const,
+          message:
+            "You must consent to electronic service, security, scheduling, request status, and account communication",
+        },
+      ];
+      for (const field of providerChecks) {
+        if (!data[field.key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: field.message,
+            path: [field.key],
+          });
+        }
+      }
+    } else {
       if (!data.acceptProviderAuthorization) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "You must accept the Provider User Agreement and PHI requirements",
+          message:
+            "You must confirm you are authorized to use RepYo and agree to the Terms of Use and the user agreement for your account type",
           path: ["acceptProviderAuthorization"],
         });
       }
       if (!data.acceptProviderPrivacy) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "You must acknowledge the Privacy Policy and Terms of Use",
+          message:
+            "You must acknowledge the Privacy Policy and consent to necessary electronic communications",
           path: ["acceptProviderPrivacy"],
         });
       }
-    }
-    if (["REP", "COMPANY_ADMIN"].includes(data.role) && !data.acceptTermsAndPrivacy) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "You must accept the Terms of Use and Privacy Policy",
-        path: ["acceptTermsAndPrivacy"],
-      });
+      if (data.role === "COMPANY_ADMIN" && !data.acceptOrgAdminAcknowledgment) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "You must confirm you are authorized to act as a RepYo organization administrator and agree to the organization administrator acknowledgment",
+          path: ["acceptOrgAdminAcknowledgment"],
+        });
+      }
     }
   });
+
+const optionalText = z
+  .string()
+  .max(200)
+  .optional()
+  .nullable()
+  .transform((v) => {
+    if (v == null) return v;
+    const trimmed = v.trim();
+    return trimmed === "" ? null : trimmed;
+  });
+
+const optionalZip = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((v) => {
+    if (v == null) return v;
+    const trimmed = v.trim();
+    return trimmed === "" ? null : trimmed;
+  })
+  .refine((v) => v == null || /^\d{5}$/.test(v), "Valid 5-digit zip code required");
+
+export const updateOwnProfileSchema = z.object({
+  name: z.string().min(2, "Name is required").optional(),
+  phone: optionalText,
+  zipCodeStart: optionalZip,
+  zipCodeEnd: optionalZip,
+  status: z.enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"]).optional(),
+  onCallEnabled: z.boolean().optional(),
+  products: z.array(z.string()).optional(),
+  jobTitle: optionalText,
+  department: optionalText,
+  facilityName: optionalText,
+  facilityAddress: z
+    .string()
+    .max(300)
+    .optional()
+    .nullable()
+    .transform((v) => {
+      if (v == null) return v;
+      const trimmed = v.trim();
+      return trimmed === "" ? null : trimmed;
+    }),
+  facilityPhone: optionalText,
+  facilityContactName: optionalText,
+  facilityContactPhone: optionalText,
+  zipCode: optionalZip,
+  requesterPhone: optionalText,
+  requesterFax: optionalText,
+  defaultPhysician: optionalText,
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
