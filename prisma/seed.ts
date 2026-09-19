@@ -494,6 +494,20 @@ async function main() {
     });
   }
 
+  if (valleySite) {
+    await db.providerSiteMembership.upsert({
+      where: { userId_siteId: { userId: provider.id, siteId: valleySite.id } },
+      create: {
+        userId: provider.id,
+        siteId: valleySite.id,
+        organizationId: valleyOrg.id,
+        isPrimary: true,
+        department: "EP Lab",
+      },
+      update: { isPrimary: true, organizationId: valleyOrg.id },
+    });
+  }
+
   const provider2 = await db.user.upsert({
     where: { email: "provider2@demo.com" },
     update: {
@@ -752,6 +766,25 @@ async function main() {
     where: { email: "admin@demo.com" },
     select: { id: true },
   });
+
+  if (medtronicAdmin && valleySite) {
+    await db.repSiteCoverage.upsert({
+      where: {
+        repUserId_siteId: { repUserId: medtronicAdmin.id, siteId: valleySite.id },
+      },
+      create: { repUserId: medtronicAdmin.id, siteId: valleySite.id },
+      update: {},
+    });
+  }
+  if (medtronicAdmin && bannerSite) {
+    await db.repSiteCoverage.upsert({
+      where: {
+        repUserId_siteId: { repUserId: medtronicAdmin.id, siteId: bannerSite.id },
+      },
+      create: { repUserId: medtronicAdmin.id, siteId: bannerSite.id },
+      update: {},
+    });
+  }
 
   const phoenixTeam =
     (await db.companyTeam.findFirst({

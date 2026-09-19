@@ -6,6 +6,7 @@ const zipSchema = z.string().regex(/^\d{5}$/, "Valid 5-digit zip code required")
 export const createRequestSchema = z
   .object({
     companyId: z.string().uuid(),
+    healthcareSiteId: z.string().uuid().optional(),
     facilityName: z.string().min(1, "Facility name is required"),
     facilityAddr: z.string().min(1, "Facility address is required"),
     facilityZipCode: zipSchema,
@@ -312,6 +313,7 @@ export const providerOnboardingSchema = z.object({
 export const createNonPhiRequestSchema = z
   .object({
     companyId: z.string().uuid(),
+    healthcareSiteId: z.string().uuid().optional(),
     facilityName: z.string().min(1, "Facility name is required"),
     facilityAddr: z.string().min(1, "Facility address is required"),
     facilityZipCode: zipSchema,

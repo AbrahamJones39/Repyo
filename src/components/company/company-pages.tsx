@@ -134,10 +134,7 @@ export function CompanyRequestsPage({ userName }: { userName: string }) {
     <PortalShell portal="company" userName={userName}>
       <h1 className="text-2xl font-bold text-slate-900">Provider Requests</h1>
       <p className="mt-1 text-sm text-slate-600">
-        Requests routed to your zip coverage
-        {delegation?.zipCodeStart && delegation?.zipCodeEnd
-          ? ` (${delegation.zipCodeStart}–${delegation.zipCodeEnd})`
-          : ""}
+        Requests routed to the facilities you cover, or the nearest covered facility
       </p>
 
       {delegation && (

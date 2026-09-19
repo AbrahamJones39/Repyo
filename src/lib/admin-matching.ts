@@ -1,35 +1,42 @@
 import { db } from "./db";
-import { parseZipCode, zipInRange } from "./zip-utils";
+import {
+  listCompanyCoveredSites,
+  pickCoverageTargetSite,
+} from "./facility-routing";
+
+type MatchedAdmin = {
+  id: string;
+  name: string;
+  delegatedRepId: string | null;
+  delegationActive: boolean;
+};
 
 export async function findMatchingAdmin(
   companyId: string,
-  zipCode: string
-): Promise<{ id: string; name: string; delegatedRepId: string | null; delegationActive: boolean } | null> {
-  const normalized = zipCode.trim();
-  if (!parseZipCode(normalized)) return null;
-
+  site: { id?: string | null; lat: number | null; lng: number | null } | null
+): Promise<MatchedAdmin | null> {
   const admins = await db.user.findMany({
-    where: {
-      role: "COMPANY_ADMIN",
-      companyId,
-      zipCodeStart: { not: null },
-      zipCodeEnd: { not: null },
-    },
+    where: { role: "COMPANY_ADMIN", companyId },
     select: {
       id: true,
       name: true,
-      zipCodeStart: true,
-      zipCodeEnd: true,
       delegatedRepId: true,
       delegationActive: true,
     },
   });
+  if (admins.length === 0) return null;
 
-  const match = admins.find((admin) =>
-    zipInRange(normalized, admin.zipCodeStart, admin.zipCodeEnd)
+  const covered = (await listCompanyCoveredSites(companyId)).filter(
+    (row) => row.role === "COMPANY_ADMIN"
   );
+  const target = pickCoverageTargetSite(site, covered);
+  const covering = target.siteId
+    ? covered.filter((row) => row.site.id === target.siteId)
+    : [];
 
-  if (!match) return null;
+  const match =
+    admins.find((admin) => covering.some((row) => row.userId === admin.id)) ??
+    admins[0];
 
   return {
     id: match.id,

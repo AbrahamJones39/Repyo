@@ -209,9 +209,9 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
         <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-slate-900">Additional zip coverage</h2>
+              <h2 className="font-semibold text-slate-900">Legacy zip notes</h2>
               <p className="mt-1 text-xs text-slate-500">
-                Optional fallback areas when a request is not tied to a specific facility.
+                Requests route by covered facility. Use My Facilities for the hospitals you cover.
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={addTerritory}>

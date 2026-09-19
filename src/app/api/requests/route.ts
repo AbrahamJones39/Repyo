@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { findMatchingAdmin } from "@/lib/admin-matching";
+import { resolveHealthcareSite } from "@/lib/facility-routing";
 import { db } from "@/lib/db";
 import { encryptPHI, encryptDate } from "@/lib/encryption";
 import { assignRepToRequest, findEligibleReps } from "@/lib/routing-engine";
@@ -208,7 +209,12 @@ export async function POST(request: Request) {
         : null;
 
     const zipCode = data.facilityZipCode.slice(0, 5);
-    const matchedAdmin = await findMatchingAdmin(companyId, zipCode);
+    const resolvedSite = await resolveHealthcareSite({
+      healthcareSiteId: data.healthcareSiteId,
+      facilityName: data.facilityName,
+      facilityZip: zipCode,
+    });
+    const matchedAdmin = await findMatchingAdmin(companyId, resolvedSite);
 
     const urgency: RequestUrgency =
       data.urgency ??
@@ -225,8 +231,10 @@ export async function POST(request: Request) {
     const routingCriteria = {
       companyId,
       facilityName: data.facilityName,
-      facilityLat: data.facilityLat,
-      facilityLng: data.facilityLng,
+      healthcareSiteId: resolvedSite?.id ?? data.healthcareSiteId ?? null,
+      facilityLat: resolvedSite?.lat ?? data.facilityLat,
+      facilityLng: resolvedSite?.lng ?? data.facilityLng,
+      facilityState: resolvedSite?.state ?? null,
       facilityZip: zipCode,
       product: data.product ?? deviceName,
       scheduledAt,
@@ -265,13 +273,14 @@ export async function POST(request: Request) {
         companyId,
         assignedAdminId: matchedAdmin?.id ?? null,
         assignedRepId: assignRepId,
+        healthcareSiteId: resolvedSite?.id ?? data.healthcareSiteId ?? null,
         facilityName: data.facilityName,
         facilityAddr: data.facilityAddr,
         facilityPhone: data.facilityPhone,
         facilityContactName: data.facilityContactName,
         facilityContactPhone: data.facilityContactPhone,
-        facilityLat: data.facilityLat,
-        facilityLng: data.facilityLng,
+        facilityLat: resolvedSite?.lat ?? data.facilityLat,
+        facilityLng: resolvedSite?.lng ?? data.facilityLng,
         facilityZipCode: zipCode,
         department: data.department,
         requesterName: data.requesterName,
@@ -311,7 +320,10 @@ export async function POST(request: Request) {
       requestId: serviceRequest.id,
       eventType: "ROUTING_SELECTED_COMPANY",
       companyId,
-      metadata: { zipCode },
+      metadata: {
+        healthcareSiteId: resolvedSite?.id ?? null,
+        facilityName: data.facilityName,
+      },
     });
 
     if (matchedAdmin) {
@@ -320,7 +332,10 @@ export async function POST(request: Request) {
         eventType: "ADMIN_MATCHED",
         targetUserId: matchedAdmin.id,
         companyId,
-        metadata: { zipCode },
+        metadata: {
+          healthcareSiteId: resolvedSite?.id ?? null,
+          facilityName: resolvedSite?.name ?? data.facilityName,
+        },
       });
     }
 
@@ -342,7 +357,7 @@ export async function POST(request: Request) {
             (crmLookupStatus === "FOUND"
               ? "CRM device lookup succeeded"
               : matchedAdmin
-                ? `Routed to admin for zip ${zipCode}`
+                ? `Routed to admin covering ${resolvedSite?.name ?? data.facilityName}`
                 : "Request submitted — awaiting admin assignment")
         ),
       },

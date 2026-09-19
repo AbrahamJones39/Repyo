@@ -9,6 +9,11 @@ import {
 } from "@prisma/client";
 import { db } from "./db";
 import {
+  coversTargetSite,
+  listCompanyCoveredSites,
+  pickCoverageTargetSite,
+} from "./facility-routing";
+import {
   isRepAvailableAtTime,
   isRepLocationSharingActive,
 } from "./rep-availability";
@@ -54,67 +59,6 @@ type RepWithProfile = User & {
     | null;
 };
 
-type CoveredSite = {
-  siteId: string;
-  state: string;
-  zipCode: string;
-};
-
-function repCoversTerritory(
-  rep: RepWithProfile,
-  criteria: RoutingCriteria,
-  coveredSites: CoveredSite[] = []
-): boolean {
-  const territories = rep.repProfile?.territories ?? [];
-
-  if (criteria.healthcareSiteId && coveredSites.length > 0) {
-    return coveredSites.some((s) => s.siteId === criteria.healthcareSiteId);
-  }
-
-  if (coveredSites.length > 0) {
-    return coveredSites.some((site) => {
-      if (criteria.facilityZip && site.zipCode === criteria.facilityZip)
-        return true;
-      if (
-        criteria.facilityZip &&
-        site.zipCode &&
-        criteria.facilityZip.length >= 3 &&
-        site.zipCode.slice(0, 3) === criteria.facilityZip.slice(0, 3)
-      ) {
-        return true;
-      }
-      if (criteria.facilityState && site.state === criteria.facilityState)
-        return true;
-      return false;
-    });
-  }
-
-  if (territories.length === 0) return true;
-
-  const hasLocation =
-    criteria.facilityState ||
-    criteria.facilityZip ||
-    criteria.facilityLat != null;
-
-  if (!hasLocation) return true;
-
-  return territories.some((t) => {
-    if (t.facilityId) return false;
-    if (criteria.facilityState && t.state === criteria.facilityState)
-      return true;
-    if (criteria.facilityZip && t.zipCode === criteria.facilityZip) return true;
-    if (
-      criteria.facilityZip &&
-      t.zipCode &&
-      criteria.facilityZip.length >= 3 &&
-      t.zipCode.slice(0, 3) === criteria.facilityZip.slice(0, 3)
-    ) {
-      return true;
-    }
-    return false;
-  });
-}
-
 function repHasProduct(rep: RepWithProfile, product?: string | null): boolean {
   if (!product) return true;
   const products = rep.repProfile?.products ?? [];
@@ -151,40 +95,33 @@ export async function findEligibleReps(
     },
   });
 
-  const repIds = reps.map((r) => r.id);
-  const siteCoverages =
-    repIds.length > 0
-      ? await db.repSiteCoverage.findMany({
-          where: { repUserId: { in: repIds } },
-          include: {
-            site: { select: { id: true, state: true, zipCode: true } },
-          },
-        })
-      : [];
+  const companyCoverage = await listCompanyCoveredSites(criteria.companyId);
+  const target = pickCoverageTargetSite(
+    criteria.healthcareSiteId ||
+      criteria.facilityLat != null ||
+      criteria.facilityLng != null
+      ? {
+          id: criteria.healthcareSiteId ?? null,
+          lat: criteria.facilityLat ?? null,
+          lng: criteria.facilityLng ?? null,
+        }
+      : null,
+    companyCoverage
+  );
 
-  const sitesByRep = new Map<string, CoveredSite[]>();
-  for (const row of siteCoverages) {
-    const list = sitesByRep.get(row.repUserId) ?? [];
-    list.push({
-      siteId: row.site.id,
-      state: row.site.state,
-      zipCode: row.site.zipCode,
-    });
-    sitesByRep.set(row.repUserId, list);
+  const sitesByRep = new Map<string, string[]>();
+  for (const row of companyCoverage) {
+    if (row.role !== "REP") continue;
+    const list = sitesByRep.get(row.userId) ?? [];
+    list.push(row.site.id);
+    sitesByRep.set(row.userId, list);
   }
 
   const eligible: EligibleRep[] = [];
 
   for (const rep of reps) {
     if (!rep.repProfile) continue;
-    if (
-      !repCoversTerritory(
-        rep,
-        criteria,
-        sitesByRep.get(rep.id) ?? []
-      )
-    )
-      continue;
+    if (!coversTargetSite(sitesByRep.get(rep.id) ?? [], target)) continue;
     if (!repHasProduct(rep, criteria.product)) continue;
 
     const { scheduleRules, availabilityBlocks, status } = rep.repProfile;

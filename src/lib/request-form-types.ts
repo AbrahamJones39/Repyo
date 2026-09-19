@@ -1,7 +1,12 @@
 export interface FacilityDefaults {
+  siteId?: string;
   name?: string;
   address?: string;
+  city?: string;
+  state?: string;
   zip?: string;
+  lat?: number | null;
+  lng?: number | null;
   department?: string;
   contactName?: string;
   contactPhone?: string;

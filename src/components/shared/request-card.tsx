@@ -131,8 +131,8 @@ export function RequestCard({
               )}
             </div>
             <p className="mt-1 text-sm text-slate-600">{localRequest.procedureType}</p>
-            {localRequest.facilityZipCode && (
-              <p className="text-xs text-slate-500">Zip {localRequest.facilityZipCode}</p>
+            {localRequest.facilityAddr && (
+              <p className="text-xs text-slate-500">{localRequest.facilityAddr}</p>
             )}
             {localRequest.identifiersHidden && (role === "rep" || role === "company") && (
               <p className="text-xs font-medium text-amber-700">

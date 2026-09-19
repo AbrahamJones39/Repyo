@@ -11,6 +11,10 @@ import {
   formatRepTerritory,
 } from "@/lib/request-form-types";
 import { cn, PROCEDURE_TYPES, REP_STATUS_LABELS } from "@/lib/utils";
+import {
+  FacilitySearchPicker,
+  type HealthcareSiteOption,
+} from "@/components/shared/facility-search-picker";
 import { Heart, MapPin, Sparkles, User, X } from "lucide-react";
 
 interface Company {
@@ -128,6 +132,23 @@ export function RequestRepModal({
   const [salesforceRecordId, setSalesforceRecordId] = useState("");
   const [phiEnabled, setPhiEnabled] = useState(true);
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
+  const [selectedFacility, setSelectedFacility] = useState<HealthcareSiteOption[]>(
+    defaultFacility?.siteId && defaultFacility.name && defaultFacility.zip
+      ? [
+          {
+            id: defaultFacility.siteId,
+            name: defaultFacility.name,
+            address: defaultFacility.address ?? "",
+            city: defaultFacility.city ?? "",
+            state: defaultFacility.state ?? "",
+            zipCode: defaultFacility.zip,
+            lat: defaultFacility.lat,
+            lng: defaultFacility.lng,
+          },
+        ]
+      : []
+  );
+  const activeFacility = selectedFacility[0];
 
   useEffect(() => {
     if (isRepMode) return;
@@ -192,7 +213,12 @@ export function RequestRepModal({
 
       const params = new URLSearchParams({ companyId: selectedCompany });
       if (selectedProduct) params.set("product", selectedProduct);
-      if (defaultFacility?.zip) params.set("facilityZip", defaultFacility.zip);
+      if (activeFacility?.id) params.set("healthcareSiteId", activeFacility.id);
+      if (activeFacility?.zipCode || defaultFacility?.zip) {
+        params.set("facilityZip", activeFacility?.zipCode ?? defaultFacility?.zip ?? "");
+      }
+      if (activeFacility?.lat != null) params.set("facilityLat", String(activeFacility.lat));
+      if (activeFacility?.lng != null) params.set("facilityLng", String(activeFacility.lng));
       if (scheduledAtIso) params.set("scheduledAt", scheduledAtIso);
 
       const [reps, favorites] = await Promise.all([
@@ -238,6 +264,10 @@ export function RequestRepModal({
   }, [
     selectedCompany,
     selectedProduct,
+    activeFacility?.id,
+    activeFacility?.zipCode,
+    activeFacility?.lat,
+    activeFacility?.lng,
     defaultFacility?.zip,
     preferredRepId,
     currentRepId,
@@ -340,6 +370,12 @@ export function RequestRepModal({
 
     const form = new FormData(e.currentTarget);
 
+    if (!activeFacility?.id || !activeFacility.zipCode) {
+      setError("Select a facility from the directory");
+      setLoading(false);
+      return;
+    }
+
     if (selectedRepId && !isRepMode && !availableIds.has(selectedRepId)) {
       setError("Selected rep is not available at the scheduled date and time");
       setLoading(false);
@@ -348,9 +384,14 @@ export function RequestRepModal({
 
     const payload = {
       companyId: selectedCompany,
-      facilityName: form.get("facilityName"),
-      facilityAddr: form.get("facilityAddr"),
-      facilityZipCode: form.get("facilityZipCode"),
+      healthcareSiteId: activeFacility?.id,
+      facilityName: activeFacility?.name ?? form.get("facilityName"),
+      facilityAddr: activeFacility
+        ? `${activeFacility.address}, ${activeFacility.city}, ${activeFacility.state} ${activeFacility.zipCode}`
+        : form.get("facilityAddr"),
+      facilityZipCode: activeFacility?.zipCode ?? form.get("facilityZipCode"),
+      facilityLat: activeFacility?.lat ?? undefined,
+      facilityLng: activeFacility?.lng ?? undefined,
       facilityContactName: form.get("facilityContactName"),
       facilityContactPhone: form.get("facilityContactPhone"),
       department: form.get("department") || undefined,
@@ -501,37 +542,18 @@ export function RequestRepModal({
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
               Facility Information
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Hospital Name"
-                name="facilityName"
-                defaultValue={defaultFacility?.name}
-                required
-              />
-              <Input
-                label="Department"
-                name="department"
-                defaultValue={defaultFacility?.department}
-              />
-            </div>
-            <Input
-              label="Facility Address"
-              name="facilityAddr"
-              defaultValue={defaultFacility?.address}
-              required
+            <FacilitySearchPicker
+              selected={selectedFacility}
+              onChange={setSelectedFacility}
+              label="Hospital or clinic"
+              helperText="Choose the facility. Requests route to people who cover it, or the nearest covered facility."
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Zip Code"
-                name="facilityZipCode"
-                defaultValue={defaultFacility?.zip}
-                required
-                placeholder="85044"
-                pattern="\d{5}"
-                maxLength={5}
-              />
-              <Input label="Facility Phone (optional)" name="facilityPhone" type="tel" />
-            </div>
+            <Input
+              label="Department"
+              name="department"
+              defaultValue={defaultFacility?.department}
+            />
+            <Input label="Facility Phone (optional)" name="facilityPhone" type="tel" />
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 label="Facility Contact Name"

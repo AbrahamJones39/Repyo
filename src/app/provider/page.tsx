@@ -17,13 +17,26 @@ export default async function ProviderPage() {
     redirect("/provider/onboarding");
   }
 
+  const primarySite = await db.providerSiteMembership.findFirst({
+    where: { userId: session.user.id },
+    include: { site: true },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+  });
+
   return (
     <ProviderDashboard
       userName={session.user.name}
       defaultFacility={{
-        name: profile?.facilityName ?? undefined,
-        address: profile?.facilityAddress ?? undefined,
-        zip: profile?.zipCode ?? undefined,
+        siteId: primarySite?.site.id,
+        name: primarySite?.site.name ?? profile?.facilityName ?? undefined,
+        address: primarySite
+          ? `${primarySite.site.address}, ${primarySite.site.city}, ${primarySite.site.state} ${primarySite.site.zipCode}`
+          : profile?.facilityAddress ?? undefined,
+        city: primarySite?.site.city,
+        state: primarySite?.site.state,
+        zip: primarySite?.site.zipCode ?? profile?.zipCode ?? undefined,
+        lat: primarySite?.site.lat,
+        lng: primarySite?.site.lng,
         department: profile?.department ?? undefined,
         contactName: profile?.facilityContactName ?? undefined,
         contactPhone: profile?.facilityContactPhone ?? undefined,
