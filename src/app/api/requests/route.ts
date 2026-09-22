@@ -85,6 +85,10 @@ export async function GET() {
         assignedAdmin: { select: { id: true, name: true } },
         company: { select: { id: true, name: true } },
         statusLogs: { orderBy: { createdAt: "desc" }, take: 5 },
+        replies: {
+          orderBy: { createdAt: "asc" },
+          include: { author: { select: { id: true, name: true, role: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 50,

@@ -102,4 +102,8 @@ export const GENERIC_NOTIFICATION = {
     title: "Request escalated to you",
     body: "A request was missed and routed to you as the designated manager. Open GoRepYo to reassign or respond.",
   },
+  requestReply: {
+    title: "New note on a request",
+    body: "Someone left a clarification note. Open GoRepYo to read it.",
+  },
 } as const;

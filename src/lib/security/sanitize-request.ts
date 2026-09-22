@@ -99,6 +99,27 @@ export function sanitizeRequestForUser(
     });
   }
 
+  const rawReplies = Array.isArray(request.replies) ? request.replies : [];
+  const replies = rawReplies
+    .filter((reply) => reply && typeof reply === "object" && "id" in reply)
+    .map((reply) => {
+      const item = reply as {
+        id: string;
+        body: string;
+        createdAt: Date | string;
+        author?: { id: string; name: string; role: Role };
+      };
+      return {
+        id: item.id,
+        body: item.body,
+        createdAt:
+          item.createdAt instanceof Date
+            ? item.createdAt.toISOString()
+            : item.createdAt,
+        author: item.author ?? { id: "", name: "Unknown", role: "REP" as Role },
+      };
+    });
+
   if (isPreAcceptance && user.role === "REP") {
     return {
       ...sanitized,
@@ -108,10 +129,14 @@ export function sanitizeRequestForUser(
       requesterEmail: undefined,
       requesterFax: undefined,
       physicianName: undefined,
+      replies: replies.map((reply) => ({
+        ...reply,
+        body: "[Open request to view note]",
+      })),
     };
   }
 
-  return sanitized;
+  return { ...sanitized, replies };
 }
 
 export async function getProviderOrgContext(userId: string) {

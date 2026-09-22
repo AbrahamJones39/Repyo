@@ -17,6 +17,7 @@ import { StatusBadge, UrgencyBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusPipeline } from "@/components/shared/status-pipeline";
 import type { RequestData } from "@/components/shared/request-card";
+import { RequestReplies } from "@/components/shared/request-replies";
 import { fetchJson } from "@/lib/api-client";
 
 export type CalendarRequestPreview = {
@@ -238,7 +239,19 @@ function RequestEventModal({
         )}
 
         {request?.notes && (
-          <DetailRow icon={<Clock className="h-4 w-4" />} label="Notes" value={request.notes} />
+          <DetailRow icon={<Clock className="h-4 w-4" />} label="Case notes" value={request.notes} />
+        )}
+
+        {request && (
+          <RequestReplies
+            requestId={request.id}
+            replies={request.replies ?? []}
+            onPosted={(reply) =>
+              setRequest((prev) =>
+                prev ? { ...prev, replies: [...(prev.replies ?? []), reply] } : prev
+              )
+            }
+          />
         )}
 
         {request?.etaMinutes != null && request.status === "EN_ROUTE" && (

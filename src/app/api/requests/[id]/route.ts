@@ -55,6 +55,10 @@ export async function GET(_request: Request, context: RouteContext) {
       },
       company: { select: { id: true, name: true } },
       statusLogs: { orderBy: { createdAt: "asc" } },
+      replies: {
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, name: true, role: true } } },
+      },
       routingEvents: { orderBy: { createdAt: "asc" } },
     },
   });

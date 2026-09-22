@@ -7,6 +7,10 @@ import { format } from "date-fns";
 import { Heart, MapPin, Phone, User, X, Cpu, ArrowRightLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api-client";
+import {
+  RequestReplies,
+  type RequestReply,
+} from "@/components/shared/request-replies";
 
 export interface RequestData {
   id: string;
@@ -38,6 +42,7 @@ export interface RequestData {
   acknowledgedAt?: string | null;
   alertActive?: boolean;
   statusLogs?: { status: string; createdAt: string; note?: string | null }[];
+  replies?: RequestReply[];
 }
 
 interface RepOption {
@@ -230,6 +235,18 @@ export function RequestCard({
             )}
           </div>
         )}
+
+        <RequestReplies
+          requestId={localRequest.id}
+          replies={localRequest.replies ?? []}
+          currentUserId={currentUserId}
+          onPosted={(reply) =>
+            setLocalRequest((prev) => ({
+              ...prev,
+              replies: [...(prev.replies ?? []), reply],
+            }))
+          }
+        />
 
         {localRequest.assignedRep && (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm">

@@ -249,6 +249,7 @@ model User {
   forwardsSent            RequestForward[]         @relation("ForwardSender")
   forwardsReceived        RequestForward[]         @relation("ForwardRecipient")
   forwardsAsOriginal      RequestForward[]         @relation("ForwardOriginalRep")
+  requestReplies          RequestReply[]
 }
 
 model Company {
@@ -731,6 +732,7 @@ model ServiceRequest {
   healthcareSite HealthcareSite? @relation(fields: [healthcareSiteId], references: [id])
   team           CompanyTeam?    @relation(fields: [teamId], references: [id])
   statusLogs     RequestStatusLog[]
+  replies        RequestReply[]
   routingEvents  RequestRoutingEvent[]
   phiAccessLogs  PhiAccessLog[]
   forwards       RequestForward[]
@@ -781,6 +783,20 @@ model RequestStatusLog {
   request ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
+}
+
+model RequestReply {
+  id        String   @id @default(uuid())
+  requestId String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  request ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author  User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@index([authorId])
 }
 
 model FavoriteRep {
