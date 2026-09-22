@@ -141,6 +141,7 @@ export async function validateInvitationToken(token: string) {
         select: { id: true, name: true, city: true, state: true },
       },
       invitedBy: { select: { name: true } },
+      designatedManager: { select: { id: true, name: true, role: true } },
     },
   });
 
@@ -173,6 +174,7 @@ export async function validateInvitationToken(token: string) {
       team: invitation.team,
       healthcareSite: invitation.healthcareSite,
       invitedByName: invitation.invitedBy.name,
+      designatedManager: invitation.designatedManager,
       expiresAt: invitation.expiresAt.toISOString(),
       preconfig: invitation.preconfig,
     },

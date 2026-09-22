@@ -526,8 +526,9 @@ acknowledgment of material changes.
 Questions about this Privacy Policy or RepYo privacy practices may be directed to:
 GoRepyo LLC
 Privacy Contact: Abraham Jones
-Privacy Email: info@gorepyo.com
-Security Reporting Email: info@gorepyo.com
+Privacy Email: Abraham@gorepyo.com
+Security Reporting Email: Abraham@gorepyo.com
+Mailing Address: 6422 W Wagoner Rd. Glendale, AZ 85308
 36. IMPORTANT HIPAA DISTINCTION
 This Privacy Policy describes GoRepyo’s privacy practices.
 It is not intended to replace a participating healthcare organization’s HIPAA Notice of

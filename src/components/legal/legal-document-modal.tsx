@@ -121,9 +121,11 @@ function DocLink({
 function LegalDocumentEmbed({
   slug,
   onOpen,
+  onReachedEnd,
 }: {
   slug: string;
   onOpen: (slug: string) => void;
+  onReachedEnd?: (slug: string) => void;
 }) {
   const [doc, setDoc] = useState<{
     title: string;
@@ -151,6 +153,12 @@ function LegalDocumentEmbed({
     };
   }, [slug]);
 
+  function markIfScrolled(element: HTMLElement) {
+    const remaining =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (remaining <= 24) onReachedEnd?.(slug);
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-3 py-2">
@@ -170,11 +178,19 @@ function LegalDocumentEmbed({
           Expand
         </button>
       </div>
-      <div className="max-h-52 overflow-y-auto px-3 py-2">
+      <div
+        className="max-h-52 overflow-y-auto px-3 py-2"
+        onScroll={(event) => markIfScrolled(event.currentTarget)}
+      >
         {loading ? (
           <p className="text-xs text-slate-500">Loading...</p>
         ) : doc ? (
-          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700">
+          <pre
+            ref={(node) => {
+              if (node?.parentElement) markIfScrolled(node.parentElement);
+            }}
+            className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-700"
+          >
             {doc.content.replace(/^#+\s/gm, "").trim()}
           </pre>
         ) : (
@@ -217,17 +233,24 @@ export function allProviderChecksAccepted(checks: ProviderAgreementChecks) {
 function AgreementCheckbox({
   checked,
   onChange,
+  disabled,
   children,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex items-start gap-3 text-sm text-slate-700">
+    <label
+      className={`flex items-start gap-3 text-sm ${
+        disabled ? "text-slate-400" : "text-slate-700"
+      }`}
+    >
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="mt-1"
         required
@@ -248,6 +271,10 @@ export function ProviderAccountAgreementSection({
   onOpenDocument: (slug: string) => void;
   ctaHint?: string;
 }) {
+  const [readSlugs, setReadSlugs] = useState<string[]>([]);
+  const requiredReads = ["terms-of-use", "privacy-policy", "provider-user-agreement"];
+  const documentsRead = requiredReads.every((slug) => readSlugs.includes(slug));
+
   function setCheck<K extends keyof ProviderAgreementChecks>(
     key: K,
     value: boolean
@@ -267,15 +294,36 @@ export function ProviderAccountAgreementSection({
         </p>
       </div>
 
-      <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
-      <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
+      <LegalDocumentEmbed
+        slug="terms-of-use"
+        onOpen={onOpenDocument}
+        onReachedEnd={(slug) =>
+          setReadSlugs((prev) => (prev.includes(slug) ? prev : [...prev, slug]))
+        }
+      />
+      <LegalDocumentEmbed
+        slug="privacy-policy"
+        onOpen={onOpenDocument}
+        onReachedEnd={(slug) =>
+          setReadSlugs((prev) => (prev.includes(slug) ? prev : [...prev, slug]))
+        }
+      />
       <LegalDocumentEmbed
         slug="provider-user-agreement"
         onOpen={onOpenDocument}
+        onReachedEnd={(slug) =>
+          setReadSlugs((prev) => (prev.includes(slug) ? prev : [...prev, slug]))
+        }
       />
+      {!documentsRead && (
+        <p className="text-xs text-slate-500">
+          Scroll to the end of each document before accepting.
+        </p>
+      )}
 
       <AgreementCheckbox
         checked={checks.orgAuth}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("orgAuth", v)}
       >
         I confirm that I am authorized by the healthcare organization identified
@@ -284,20 +332,22 @@ export function ProviderAccountAgreementSection({
 
       <AgreementCheckbox
         checked={checks.userAgreement}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("userAgreement", v)}
       >
         I agree to the{" "}
         <DocLink slug="provider-user-agreement" onOpen={onOpenDocument}>
-          RepYo healthcare provider user agreement
+          RepYo Healthcare Provider User Agreement
         </DocLink>
         .
       </AgreementCheckbox>
 
       <AgreementCheckbox
         checked={checks.phiUse}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("phiUse", v)}
       >
-        I understand that RepYo may contain protected health information and
+        I understand that RepYo may contain Protected Health Information and
         agree to access, enter, use, and disclose patient information only as
         authorized and reasonably necessary for legitimate professional
         purposes.
@@ -305,30 +355,33 @@ export function ProviderAccountAgreementSection({
 
       <AgreementCheckbox
         checked={checks.notEmergency}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("notEmergency", v)}
       >
-        I understand that RepYo is for representative support requests and is
+        I understand that RepYo is for representative-support requests and is
         not an emergency service, electronic health record, or substitute for my
-        organization&apos;s clinical communication system.
+        organization&apos;s clinical communication systems.
       </AgreementCheckbox>
 
       <AgreementCheckbox
         checked={checks.privacyAck}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("privacyAck", v)}
       >
         I acknowledge that I have been provided access to the{" "}
         <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-          RepYo privacy policy
+          RepYo Privacy Policy
         </DocLink>
         .
       </AgreementCheckbox>
 
       <AgreementCheckbox
         checked={checks.electronicComm}
+        disabled={!documentsRead}
         onChange={(v) => setCheck("electronicComm", v)}
       >
-        I consent to electronic service, security, scheduling, request status,
-        and account communication from RepYo.
+        I consent to electronic service, security, scheduling, request-status,
+        and account communications from RepYo.
       </AgreementCheckbox>
     </div>
   );
@@ -354,7 +407,18 @@ export function AccountAgreementSection({
   onAcceptOrgAdminAcknowledgment?: (v: boolean) => void;
 }) {
   const userAgreementSlug =
-    role === "REP" ? "rep-user-agreement" : "terms-of-use";
+    role === "REP" ? "rep-user-agreement" : "organization-admin-acknowledgment";
+  const requiredReads = [
+    "terms-of-use",
+    "privacy-policy",
+    userAgreementSlug,
+  ];
+  const [readSlugs, setReadSlugs] = useState<string[]>([]);
+  const documentsRead = requiredReads.every((slug) => readSlugs.includes(slug));
+
+  function markRead(slug: string) {
+    setReadSlugs((prev) => (prev.includes(slug) ? prev : [...prev, slug]));
+  }
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -369,59 +433,74 @@ export function AccountAgreementSection({
         </p>
       </div>
 
-      <LegalDocumentEmbed slug="terms-of-use" onOpen={onOpenDocument} />
-      <LegalDocumentEmbed slug="privacy-policy" onOpen={onOpenDocument} />
-      {role === "REP" && (
-        <LegalDocumentEmbed slug="rep-user-agreement" onOpen={onOpenDocument} />
-      )}
-      {role === "COMPANY_ADMIN" && (
-        <LegalDocumentEmbed
-          slug="organization-admin-acknowledgment"
-          onOpen={onOpenDocument}
-        />
+      <LegalDocumentEmbed
+        slug="terms-of-use"
+        onOpen={onOpenDocument}
+        onReachedEnd={markRead}
+      />
+      <LegalDocumentEmbed
+        slug="privacy-policy"
+        onOpen={onOpenDocument}
+        onReachedEnd={markRead}
+      />
+      <LegalDocumentEmbed
+        slug={userAgreementSlug}
+        onOpen={onOpenDocument}
+        onReachedEnd={markRead}
+      />
+      {!documentsRead && (
+        <p className="text-xs text-slate-500">
+          Scroll to the end of each document before accepting.
+        </p>
       )}
 
       <AgreementCheckbox
         checked={acceptAuthorization}
+        disabled={!documentsRead}
         onChange={onAcceptAuthorization}
       >
         I confirm that I am authorized to use RepYo and agree to the{" "}
         <DocLink slug="terms-of-use" onOpen={onOpenDocument}>
-          RepYo terms of use
+          RepYo Terms of Use
         </DocLink>{" "}
         and the{" "}
         <DocLink slug={userAgreementSlug} onOpen={onOpenDocument}>
-          user agreement applicable to my account type
+          User Agreement applicable to my account type
         </DocLink>
         . I understand that RepYo may involve confidential healthcare information
         and that I may access or use such information only for authorized
-        purposes.
+        professional purposes.
       </AgreementCheckbox>
 
-      <AgreementCheckbox checked={acceptPrivacy} onChange={onAcceptPrivacy}>
+      <AgreementCheckbox
+        checked={acceptPrivacy}
+        disabled={!documentsRead}
+        onChange={onAcceptPrivacy}
+      >
         I acknowledge that I have been provided access to the{" "}
         <DocLink slug="privacy-policy" onOpen={onOpenDocument}>
-          RepYo privacy policy
+          RepYo Privacy Policy
         </DocLink>{" "}
-        and consent to necessary electronic account security, requests,
-        scheduling, and service communication.
+        and consent to necessary electronic account, security, request,
+        scheduling, and service communications.
       </AgreementCheckbox>
 
       {role === "COMPANY_ADMIN" && onAcceptOrgAdminAcknowledgment && (
         <AgreementCheckbox
           checked={acceptOrgAdminAcknowledgment}
+          disabled={!documentsRead}
           onChange={onAcceptOrgAdminAcknowledgment}
         >
           I confirm that I am authorized by the organization identified above to
-          act as a RepYo organization administrator. I have read and agree to
+          act as a RepYo Organization Administrator. I have read and agree to
           the RepYo{" "}
           <DocLink
             slug="organization-admin-acknowledgment"
             onOpen={onOpenDocument}
           >
-            organization administrator acknowledgment
+            Organization Administrator Acknowledgment
           </DocLink>{" "}
-          and understand that my administrator privileges must be used only for
+          and understand that my administrative privileges must be used only for
           authorized organizational purposes, including appropriately managing
           user access and protecting confidential information and PHI.
         </AgreementCheckbox>

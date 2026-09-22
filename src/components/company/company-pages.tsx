@@ -9,6 +9,10 @@ import { Input, Select } from "@/components/ui/input";
 import { cn, PROCEDURE_TYPES, QUALIFIED_STATUS_LABELS, REP_STATUS_LABELS } from "@/lib/utils";
 import { Plus, X } from "lucide-react";
 import { CompanyInviteButton } from "@/components/company/company-invite-button";
+import {
+  FacilitySearchPicker,
+  type HealthcareSiteOption,
+} from "@/components/shared/facility-search-picker";
 
 interface Rep {
   id: string;
@@ -392,6 +396,7 @@ function AddRepModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
   const [managers, setManagers] = useState<{ id: string; name: string; role: string }[]>([]);
 
   useEffect(() => {
@@ -417,6 +422,12 @@ function AddRepModal({
     setLoading(true);
     setError("");
 
+    if (selectedSites.length === 0) {
+      setError("Select at least one facility this rep covers");
+      setLoading(false);
+      return;
+    }
+
     const form = new FormData(e.currentTarget);
 
     try {
@@ -432,6 +443,7 @@ function AddRepModal({
           credentialStatus: form.get("credentialStatus"),
           status: form.get("status"),
           products: selectedProducts,
+          siteIds: selectedSites.map((site) => site.id),
         }),
       });
       onSuccess(rep);
@@ -490,6 +502,14 @@ function AddRepModal({
           <p className="-mt-2 text-xs text-slate-500">
             Required. Missed requests escalate to this manager.
           </p>
+
+          <FacilitySearchPicker
+            selected={selectedSites}
+            onChange={setSelectedSites}
+            multiple
+            label="Facilities this rep covers"
+            helperText="Choose the hospitals and clinics from the shared directory."
+          />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select

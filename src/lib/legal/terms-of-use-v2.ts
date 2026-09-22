@@ -713,8 +713,9 @@ Failure by GoRepyo to enforce a provision does not waive the right to enforce th
 or another provision later.
 63. CONTACT INFORMATION
 GoRepyo LLC
-General Support: info@Gorepyo.com
-Privacy: info@Gorepyo.com
-Security Incident Reporting: info@Gorepyo.com
-Legal: info@Gorepyo.com
+General Support: Abraham@Gorepyo.com
+Privacy: Abraham@Gorepyo.com
+Security Incident Reporting: Abraham@Gorepyo.com
+Legal: Abraham@Gorepyo.com
+Mailing Address: 6422 W Wagoner Rd Glendale AZ 85308
 `;

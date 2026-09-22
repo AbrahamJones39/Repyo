@@ -28,6 +28,7 @@ export type SignupPayload = {
   acceptProviderElectronicComm?: boolean;
   siteIds?: string[];
   primarySiteId?: string | null;
+  managerId?: string | null;
   inviteToken?: string | null;
   requireManualApproval?: boolean;
   grantOrgAdministrator?: boolean;

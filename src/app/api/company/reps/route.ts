@@ -11,6 +11,7 @@ import {
 } from "@/lib/security/authorization";
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import { logPermissionChange } from "@/lib/security/audit";
+import { setRepSiteCoverage } from "@/lib/healthcare-sites/service";
 import {
   assertOrgUnitInCompany,
   getScopedRepIds,
@@ -196,6 +197,8 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    await setRepSiteCoverage(rep.id, data.siteIds);
 
     await logPermissionChange({
       targetUserId: rep.id,

@@ -2,7 +2,13 @@ import { db } from "@/lib/db";
 import {
   linkSiteToOrganization,
   setProviderSites,
+  setRepSiteCoverage,
 } from "@/lib/healthcare-sites/service";
+import { ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION } from "@/lib/legal/organization-admin-acknowledgment";
+import { PRIVACY_POLICY_VERSION } from "@/lib/legal/privacy-policy-v2";
+import { PROVIDER_USER_AGREEMENT_VERSION } from "@/lib/legal/provider-user-agreement-v2";
+import { REP_USER_AGREEMENT_VERSION } from "@/lib/legal/rep-user-agreement-v2";
+import { TERMS_OF_USE_VERSION } from "@/lib/legal/terms-of-use-v2";
 import {
   acceptInvitation,
   applyInvitationPreconfig,
@@ -55,6 +61,7 @@ export async function completeSignup(params: {
     acceptProviderElectronicComm,
     siteIds = [],
     primarySiteId,
+    managerId,
     inviteToken,
     grantOrgAdministrator,
   } = params.payload;
@@ -92,7 +99,7 @@ export async function completeSignup(params: {
     }
     const { requireRepManager } = await import("@/lib/org-scope");
     invitationManagerId = await requireRepManager({
-      managerId: invitationManagerId,
+      managerId: invitationManagerId ?? managerId,
       companyId,
     });
   }
@@ -174,20 +181,75 @@ export async function completeSignup(params: {
         : Boolean(acceptProviderAuthorization && acceptProviderPrivacy) ||
           Boolean(acceptTermsAndPrivacy);
 
+  if ((role === "REP" || role === "COMPANY_ADMIN") && siteIds.length > 0) {
+    await setRepSiteCoverage(user.id, siteIds);
+  }
+
   if (acceptedAgreements) {
     await syncLegalDocumentsFromCode();
     const slugs =
       role === "PROVIDER"
         ? [...PROVIDER_ACCEPTANCE_SLUGS]
         : [...authorizationSlugsForRole(role), ...ACCOUNT_PRIVACY_SLUGS];
+    const coveredSites =
+      siteIds.length > 0
+        ? await db.healthcareSite.findMany({
+            where: { id: { in: siteIds } },
+            select: { name: true },
+          })
+        : [];
+    const facilityNames = coveredSites.map((site) => site.name);
+    const managerRecord = invitationManagerId
+      ? await db.user.findUnique({
+          where: { id: invitationManagerId },
+          select: { id: true, name: true },
+        })
+      : null;
+    const companyName = companyId
+      ? (
+          await db.company.findUnique({
+            where: { id: companyId },
+            select: { name: true },
+          })
+        )?.name ?? null
+      : null;
+    const roleAgreementVersion =
+      role === "PROVIDER"
+        ? PROVIDER_USER_AGREEMENT_VERSION
+        : role === "REP"
+          ? REP_USER_AGREEMENT_VERSION
+          : ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION;
+
     await recordAgreementAcceptances([...new Set(slugs)], {
       userId: user.id,
       legalName,
+      email: normalizedEmail,
       role,
-      organizationId: linkedOrganizationId,
-      organizationName,
-      facilityName: facilityName?.trim() ?? null,
+      organizationId: linkedOrganizationId ?? companyId ?? null,
+      organizationName: organizationName ?? companyName,
+      organizationType:
+        role === "PROVIDER"
+          ? "HEALTHCARE_ORGANIZATION"
+          : "MEDICAL_DEVICE_COMPANY",
+      facilityName: facilityNames[0] ?? facilityName?.trim() ?? null,
+      facilityNames,
       signatureText: `${legalName} — account signup acceptance`,
+      authenticationStatus: "ACCOUNT_CREATED",
+      organizationVerificationStatus: "PENDING",
+      administratorRole:
+        role === "COMPANY_ADMIN" ? "Medical Device Company Administrator" : null,
+      permissionsGranted:
+        role === "COMPANY_ADMIN" ? ["organization administrator"] : [],
+      grantedBy: inviteToken?.trim() ? "INVITATION" : "SIGNUP",
+      managerId: managerRecord?.id ?? null,
+      managerName: managerRecord?.name ?? null,
+      termsVersion: TERMS_OF_USE_VERSION,
+      roleAgreementVersion,
+      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      acknowledgmentVersion:
+        role === "COMPANY_ADMIN"
+          ? ORGANIZATION_ADMIN_ACKNOWLEDGMENT_VERSION
+          : null,
     });
   }
 

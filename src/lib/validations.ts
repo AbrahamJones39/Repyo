@@ -229,6 +229,7 @@ export const createRepSchema = z.object({
     .enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"])
     .default("AVAILABLE"),
   products: z.array(z.string()).default([]),
+  siteIds: z.array(z.string().uuid()).min(1, "Select at least one facility"),
 });
 
 export const createOrgUnitSchema = z.object({
@@ -410,6 +411,7 @@ export const signupSchema = z
     acceptProviderElectronicComm: z.boolean().optional(),
     siteIds: z.string().optional(),
     primarySiteId: z.string().uuid().optional(),
+    managerId: z.string().uuid().optional(),
     inviteToken: z.string().optional(),
   })
   .superRefine((data, ctx) => {
@@ -450,21 +452,30 @@ export const signupSchema = z
         }
       }
     }
-    if (data.role === "COMPANY_ADMIN") {
-      if (!data.zipCodeStart?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Starting zip code is required for company admins",
-          path: ["zipCodeStart"],
-        });
+    let coveredSiteCount = 0;
+    if (data.siteIds?.trim()) {
+      try {
+        const parsedSites = JSON.parse(data.siteIds);
+        coveredSiteCount = Array.isArray(parsedSites)
+          ? parsedSites.filter(Boolean).length
+          : 0;
+      } catch {
+        coveredSiteCount = 0;
       }
-      if (!data.zipCodeEnd?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Ending zip code is required for company admins",
-          path: ["zipCodeEnd"],
-        });
-      }
+    }
+    if (coveredSiteCount < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select at least one facility you cover",
+        path: ["siteIds"],
+      });
+    }
+    if (data.role === "REP" && !data.managerId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Every rep account must have a designated manager",
+        path: ["managerId"],
+      });
     }
     if (data.role === "PROVIDER") {
       const providerChecks = [

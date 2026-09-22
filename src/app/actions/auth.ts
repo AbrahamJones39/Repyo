@@ -60,6 +60,7 @@ export async function signupAction(formData: FormData) {
       formData.get("acceptProviderElectronicComm") === "true" || undefined,
     siteIds: formData.get("siteIds") || undefined,
     primarySiteId: formData.get("primarySiteId") || undefined,
+    managerId: formData.get("managerId") || undefined,
     inviteToken: formData.get("inviteToken") || undefined,
   });
 
@@ -99,6 +100,7 @@ export async function signupAction(formData: FormData) {
     acceptProviderElectronicComm,
     siteIds: siteIdsRaw,
     primarySiteId,
+    managerId,
     inviteToken,
   } = parsed.data;
 
@@ -312,6 +314,7 @@ export async function signupAction(formData: FormData) {
       acceptProviderElectronicComm,
       siteIds,
       primarySiteId,
+      managerId: managerId ?? null,
       inviteToken: inviteToken?.trim() ?? null,
       requireManualApproval: requirements.requireManualApproval,
       grantOrgAdministrator,
@@ -377,6 +380,7 @@ export async function signupAction(formData: FormData) {
       acceptProviderElectronicComm,
       siteIds,
       primarySiteId,
+      managerId: managerId ?? null,
       inviteToken: inviteToken?.trim() ?? null,
       grantOrgAdministrator,
     },

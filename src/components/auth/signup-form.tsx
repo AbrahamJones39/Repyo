@@ -90,6 +90,12 @@ export function SignupForm() {
   const [legalDocSlug, setLegalDocSlug] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
+  const [companyId, setCompanyId] = useState("");
+  const [managerId, setManagerId] = useState("");
+  const [managerLocked, setManagerLocked] = useState(false);
+  const [managers, setManagers] = useState<
+    { id: string; name: string; role: string }[]
+  >([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -140,6 +146,12 @@ export function SignupForm() {
           ...(inv.company?.id ? { companyId: inv.company.id } : {}),
         }));
         if (inv.organization?.id) setRequestOrgAccess(false);
+        if (inv.company?.id) setCompanyId(inv.company.id);
+        if (inv.designatedManager?.id) {
+          setManagerId(inv.designatedManager.id);
+          setManagerLocked(true);
+          setManagers([inv.designatedManager]);
+        }
         if (inv.healthcareSite) {
           setSelectedSites([
             {
@@ -157,14 +169,25 @@ export function SignupForm() {
   }, [inviteTokenParam]);
 
   useEffect(() => {
+    if (role !== "REP" || !companyId || managerLocked) return;
+    fetch(`/api/companies/public/managers?companyId=${encodeURIComponent(companyId)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { id: string; name: string; role: string }[]) =>
+        setManagers(Array.isArray(data) ? data : [])
+      )
+      .catch(() => setManagers([]));
+  }, [companyId, role, managerLocked]);
+
+  useEffect(() => {
     setProviderStep(1);
     setAcceptAuthorizedUse(false);
     setAcceptPrivacyCommunications(false);
     setAcceptOrgAdminAcknowledgment(false);
     setProviderChecks(EMPTY_PROVIDER_AGREEMENT_CHECKS);
     setSelectedSites([]);
+    if (!managerLocked) setManagerId("");
     setError("");
-  }, [role]);
+  }, [role, managerLocked]);
 
   function captureFormValues(form: HTMLFormElement) {
     const next: Record<string, string> = { ...formValues };
@@ -236,8 +259,20 @@ export function SignupForm() {
     setLoading(true);
     setError("");
 
+    if (role !== "PROVIDER" && selectedSites.length === 0) {
+      setError("Select the hospitals and clinics you cover");
+      setLoading(false);
+      return;
+    }
+    if (role === "REP" && !managerId) {
+      setError("Select the manager designated for this rep account");
+      setLoading(false);
+      return;
+    }
+
     const form = new FormData(e.currentTarget);
     form.set("role", role);
+    if (managerId) form.set("managerId", managerId);
     form.set("requestOrgAccess", requestOrgAccess ? "true" : "false");
     form.set(
       "acceptProviderAuthorization",
@@ -659,34 +694,16 @@ export function SignupForm() {
                 placeholder="At least 8 characters"
               />
 
-              {role === "COMPANY_ADMIN" && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
-                    label="Zip Range Start"
-                    name="zipCodeStart"
-                    required
-                    placeholder="85040"
-                    pattern="\d{5}"
-                    maxLength={5}
-                  />
-                  <Input
-                    label="Zip Range End"
-                    name="zipCodeEnd"
-                    required
-                    placeholder="85050"
-                    pattern="\d{5}"
-                    maxLength={5}
-                  />
-                </div>
-              )}
-
               {needsCompany && (
                 <Select
                   label="Device Company"
                   name="companyId"
                   required
-                  defaultValue={formValues.companyId}
-                  key={formValues.companyId ?? "company"}
+                  value={companyId}
+                  onChange={(e) => {
+                    setCompanyId(e.target.value);
+                    if (!managerLocked) setManagerId("");
+                  }}
                   options={[
                     {
                       value: "",
@@ -698,6 +715,41 @@ export function SignupForm() {
                   ]}
                 />
               )}
+
+              {role === "REP" && (
+                <Select
+                  label="Designated manager"
+                  name="managerId"
+                  required
+                  value={managerId}
+                  disabled={managerLocked || !companyId}
+                  onChange={(e) => setManagerId(e.target.value)}
+                  options={[
+                    {
+                      value: "",
+                      label: !companyId
+                        ? "Select a company first"
+                        : managers.length
+                          ? "Select your manager"
+                          : "No managers are available for this company yet",
+                    },
+                    ...managers.map((manager) => ({
+                      value: manager.id,
+                      label: `${manager.name} · ${
+                        manager.role === "COMPANY_ADMIN" ? "Admin" : "Rep"
+                      }`,
+                    })),
+                  ]}
+                />
+              )}
+
+              <FacilitySearchPicker
+                selected={selectedSites}
+                onChange={setSelectedSites}
+                multiple
+                label="Facilities you cover"
+                helperText="Search the shared directory. Requests route to people who cover these hospitals and clinics."
+              />
 
               <AccountAgreementSection
                 role={role === "COMPANY_ADMIN" ? "COMPANY_ADMIN" : "REP"}
@@ -734,18 +786,24 @@ export function SignupForm() {
                   providerStep === 4 &&
                   !allProviderChecksAccepted(providerChecks)) ||
                 (role === "REP" &&
-                  (!acceptAuthorizedUse || !acceptPrivacyCommunications)) ||
+                  (!acceptAuthorizedUse ||
+                    !acceptPrivacyCommunications ||
+                    !managerId ||
+                    selectedSites.length === 0)) ||
                 (role === "COMPANY_ADMIN" &&
                   (!acceptAuthorizedUse ||
                     !acceptPrivacyCommunications ||
-                    !acceptOrgAdminAcknowledgment))
+                    !acceptOrgAdminAcknowledgment ||
+                    selectedSites.length === 0))
               }
             >
               {loading
                 ? "Creating account..."
                 : role === "PROVIDER" && providerStep < 4
                   ? "Continue"
-                  : "Create Account"}
+                  : role === "PROVIDER"
+                    ? "Create & Activate My Provider Account"
+                    : "Create Account"}
             </Button>
           </div>
         </form>
