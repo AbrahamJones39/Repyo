@@ -15,7 +15,15 @@ type FlatUnit = {
   id: string;
   name: string;
   typeLabel: string;
+  parentId: string | null;
   depth: number;
+};
+
+type OrgNode = {
+  id: string;
+  name: string;
+  typeLabel: string;
+  children: OrgNode[];
 };
 
 type Person = {
@@ -26,29 +34,18 @@ type Person = {
   managerId: string | null;
   manager: { id: string; name: string; role: string } | null;
   homeOrgUnit: { id: string; name: string; typeLabel: string } | null;
+  orgAssignments: { orgUnitId: string; permissions: string[] }[];
 };
 
 type OrgPayload = {
   companyName?: string;
+  tree: OrgNode[];
   flat: FlatUnit[];
   people: Person[];
   canAssignPeople: boolean;
+  canManageStructure: boolean;
+  scope: { isCompanyWide: boolean; unitIds: string[] };
 };
-
-function roleFromPerson(
-  person: Person | undefined,
-  extraRoleLabels: string[] = []
-): { role: string; custom: string } {
-  const label = person?.homeOrgUnit?.typeLabel?.trim() ?? "";
-  if (!label) return { role: "", custom: "" };
-  if (
-    (ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label) ||
-    extraRoleLabels.includes(label)
-  ) {
-    return { role: label, custom: "" };
-  }
-  return { role: CUSTOM_ORG_UNIT_TYPE_VALUE, custom: label };
-}
 
 const PERMISSION_OPTIONS = [
   { id: "VIEW_METRICS", label: "View metrics" },
@@ -57,8 +54,27 @@ const PERMISSION_OPTIONS = [
   { id: "VIEW_TEAM_CALENDAR", label: "View team calendars" },
   { id: "MANAGE_REPS", label: "Manage reps" },
   { id: "MANAGE_TEAMS", label: "Manage teams" },
+  { id: "MANAGE_ORG_UNITS", label: "Manage organization" },
   { id: "MANAGE_TERRITORY", label: "Manage territory" },
 ];
+
+function UnitBranch({ node, depth }: { node: OrgNode; depth: number }) {
+  return (
+    <li>
+      <div className="flex items-baseline gap-2 py-1" style={{ paddingLeft: depth * 16 }}>
+        <span className="font-medium text-slate-900">{node.name}</span>
+        <span className="text-xs text-slate-500">{node.typeLabel}</span>
+      </div>
+      {node.children.length > 0 && (
+        <ul>
+          {node.children.map((child) => (
+            <UnitBranch key={child.id} node={child} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 export function CompanyOrgPage({
   userName,
@@ -71,8 +87,7 @@ export function CompanyOrgPage({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [assignUserId, setAssignUserId] = useState("");
-  const [assignRole, setAssignRole] = useState("");
-  const [customAssignRole, setCustomAssignRole] = useState("");
+  const [assignUnitId, setAssignUnitId] = useState("");
   const [assignManagerId, setAssignManagerId] = useState("");
   const [permissions, setPermissions] = useState<string[]>([
     "VIEW_METRICS",
@@ -80,12 +95,17 @@ export function CompanyOrgPage({
     "VIEW_CALENDAR",
     "VIEW_TEAM_CALENDAR",
   ]);
+  const [unitName, setUnitName] = useState("");
+  const [unitType, setUnitType] = useState("Region");
+  const [customUnitType, setCustomUnitType] = useState("");
+  const [unitParentId, setUnitParentId] = useState("");
 
   const load = useCallback(async () => {
     setError("");
     try {
       const payload = await fetchJson<OrgPayload>("/api/company/org-units");
       setData(payload);
+      setUnitParentId((current) => current || payload.flat.find((unit) => unit.depth === 0)?.id || payload.flat[0]?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load organization");
     }
@@ -95,56 +115,63 @@ export function CompanyOrgPage({
     load();
   }, [load]);
 
-  const isCustomAssignRole = assignRole === CUSTOM_ORG_UNIT_TYPE_VALUE;
-  const resolvedAssignRole = isCustomAssignRole ? customAssignRole.trim() : assignRole;
   const displayedCompany = companyName || data?.companyName || "";
+  const selectedPerson = data?.people.find((person) => person.id === assignUserId);
+  const resolvedUnitType =
+    unitType === CUSTOM_ORG_UNIT_TYPE_VALUE ? customUnitType.trim() : unitType;
+
+  async function addUnit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!unitName.trim() || !resolvedUnitType) return;
+    setError("");
+    setMessage("");
+    try {
+      await fetchJson("/api/company/org-units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: unitName.trim(),
+          typeLabel: resolvedUnitType,
+          parentId: unitParentId || null,
+        }),
+      });
+      setUnitName("");
+      setMessage("Unit added. Admins assigned here also cover every unit below it.");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add unit");
+    }
+  }
 
   async function assignMember(e: React.FormEvent) {
     e.preventDefault();
-    if (!assignUserId || !resolvedAssignRole) return;
-    const person = data?.people.find((p) => p.id === assignUserId);
-    if (person?.role === "REP" && !assignManagerId) {
+    if (!assignUserId || !assignUnitId) return;
+    if (selectedPerson?.role === "REP" && !assignManagerId) {
       setError("Every rep account must have a designated manager");
-      return;
-    }
-    const rootId = data?.flat.find((u) => u.depth === 0)?.id ?? data?.flat[0]?.id;
-    if (!rootId) {
-      setError("Organization is not ready yet. Try again in a moment.");
       return;
     }
     setError("");
     setMessage("");
     try {
-      await fetchJson(`/api/company/org-units/${rootId}/assignments`, {
+      await fetchJson(`/api/company/org-units/${assignUnitId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: assignUserId,
-          permissions,
-          typeLabel: resolvedAssignRole,
+          permissions: selectedPerson?.role === "COMPANY_ADMIN" ? permissions : [],
           managerId: assignManagerId || null,
         }),
       });
-      setMessage("Assignment saved");
+      setMessage(
+        selectedPerson?.role === "COMPANY_ADMIN"
+          ? "Admin scope saved. They can see this unit and every unit below it."
+          : "Rep assignment saved. Missed requests escalate to their manager."
+      );
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
     }
   }
-
-  const selectedPerson = data?.people.find((p) => p.id === assignUserId);
-  const extraRoleLabels = data
-    ? [
-        ...new Set(
-          data.people
-            .map((p) => p.homeOrgUnit?.typeLabel)
-            .filter((label): label is string => typeof label === "string" && label.length > 0)
-            .filter(
-              (label) => !(ORG_UNIT_TYPE_SUGGESTIONS as readonly string[]).includes(label)
-            )
-        ),
-      ]
-    : [];
 
   return (
     <PortalShell portal="company" userName={userName}>
@@ -154,9 +181,16 @@ export function CompanyOrgPage({
           <p className="mt-1 text-sm font-semibold text-slate-800">{displayedCompany}</p>
         )}
         <p className="mt-1 text-sm text-slate-600">
-          Assign each person a role and a designated manager. This is operational access
-          only — it does not grant patient information.
+          Account types stay Provider, Rep, and Admin. Place each Admin on a unit —
+          company, division, region, area, territory, team, or a name you choose.
+          They manage that unit and every unit under it. This is operational access
+          only and does not include patient information.
         </p>
+        {data?.scope && !data.scope.isCompanyWide && (
+          <p className="mt-2 text-xs text-slate-500">
+            Your own access is limited to your assigned unit and the units below it.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -171,18 +205,84 @@ export function CompanyOrgPage({
       {!data ? (
         error ? null : <p className="text-slate-500">Loading organization...</p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-5">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-3">
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="font-semibold text-slate-900">Structure</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Build the ladder your company actually uses. Nothing here is tied to a manufacturer.
+              </p>
+              {data.tree.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-500">No units yet.</p>
+              ) : (
+                <ul className="mt-4 text-sm">
+                  {data.tree.map((node) => (
+                    <UnitBranch key={node.id} node={node} depth={0} />
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {data.canManageStructure && (
+              <form onSubmit={addUnit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                <h2 className="font-semibold text-slate-900">Add unit</h2>
+                <Input
+                  label="Name"
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
+                  placeholder="e.g. Southwest"
+                  required
+                />
+                <Select
+                  label="Type"
+                  value={unitType}
+                  onChange={(e) => setUnitType(e.target.value)}
+                  options={[
+                    ...ORG_UNIT_TYPE_SUGGESTIONS.map((type) => ({
+                      value: type,
+                      label: type,
+                    })),
+                    { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Custom type" },
+                  ]}
+                />
+                {unitType === CUSTOM_ORG_UNIT_TYPE_VALUE && (
+                  <Input
+                    label="Custom type"
+                    value={customUnitType}
+                    onChange={(e) => setCustomUnitType(e.target.value)}
+                    placeholder="e.g. District"
+                    required
+                  />
+                )}
+                <Select
+                  label="Reports into"
+                  value={unitParentId}
+                  onChange={(e) => setUnitParentId(e.target.value)}
+                  options={data.flat.map((unit) => ({
+                    value: unit.id,
+                    label: `${"· ".repeat(unit.depth)}${unit.name} (${unit.typeLabel})`,
+                  }))}
+                />
+                <Button type="submit" className="w-full" disabled={!unitName.trim() || !resolvedUnitType}>
+                  Add unit
+                </Button>
+              </form>
+            )}
+          </div>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="font-semibold text-slate-900">People</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Every rep has a designated manager. Missed requests escalate to that manager.
+              Every rep has a designated manager. If that rep misses a request, it is rerouted to the manager.
+              Managers see operational metrics for the people below them.
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 text-left text-xs uppercase text-slate-500">
                     <th className="px-2 py-2">Person</th>
-                    <th className="px-2 py-2">Role</th>
+                    <th className="px-2 py-2">Account</th>
+                    <th className="px-2 py-2">Unit</th>
                     <th className="px-2 py-2">Manager</th>
                   </tr>
                 </thead>
@@ -194,8 +294,12 @@ export function CompanyOrgPage({
                         <p className="text-xs text-slate-500">{person.email}</p>
                       </td>
                       <td className="px-2 py-2 text-slate-600">
-                        {person.homeOrgUnit?.typeLabel ??
-                          (person.role === "REP" ? "Rep" : "Admin")}
+                        {person.role === "REP" ? "Rep" : "Admin"}
+                      </td>
+                      <td className="px-2 py-2 text-slate-600">
+                        {person.homeOrgUnit
+                          ? `${person.homeOrgUnit.name} · ${person.homeOrgUnit.typeLabel}`
+                          : "Unassigned"}
                       </td>
                       <td className="px-2 py-2 text-slate-600">
                         {person.manager?.name ?? (person.role === "REP" ? "Missing" : "—")}
@@ -210,80 +314,68 @@ export function CompanyOrgPage({
           {data.canAssignPeople && (
             <form
               onSubmit={assignMember}
-              className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2"
+              className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
             >
               <h2 className="font-semibold text-slate-900">Assign person</h2>
-              <Select
-                label="Person"
-                value={assignUserId}
-                onChange={(e) => {
-                  setAssignUserId(e.target.value);
-                  const person = data.people.find((p) => p.id === e.target.value);
-                  setAssignManagerId(person?.managerId ?? "");
-                  const nextRole = roleFromPerson(person, extraRoleLabels);
-                  setAssignRole(nextRole.role);
-                  setCustomAssignRole(nextRole.custom);
-                }}
-                options={[
-                  { value: "", label: "Select..." },
-                  ...data.people.map((p) => ({
-                    value: p.id,
-                    label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
-                  })),
-                ]}
-              />
-              <Select
-                label="Organization role"
-                value={assignRole}
-                onChange={(e) => {
-                  setAssignRole(e.target.value);
-                  if (e.target.value !== CUSTOM_ORG_UNIT_TYPE_VALUE) {
-                    setCustomAssignRole("");
-                  }
-                }}
-                options={[
-                  { value: "", label: "Select..." },
-                  ...ORG_UNIT_TYPE_SUGGESTIONS.map((t) => ({
-                    value: t,
-                    label: t,
-                  })),
-                  ...extraRoleLabels.map((t) => ({
-                    value: t,
-                    label: t,
-                  })),
-                  { value: CUSTOM_ORG_UNIT_TYPE_VALUE, label: "Create a new role" },
-                ]}
-              />
-              {isCustomAssignRole && (
-                <Input
-                  label="New organization role"
-                  value={customAssignRole}
-                  onChange={(e) => setCustomAssignRole(e.target.value)}
-                  placeholder="e.g. Regional Director"
-                  required
+              <div className="grid gap-3 md:grid-cols-2">
+                <Select
+                  label="Person"
+                  value={assignUserId}
+                  onChange={(e) => {
+                    const person = data.people.find((item) => item.id === e.target.value);
+                    setAssignUserId(e.target.value);
+                    setAssignManagerId(person?.managerId ?? "");
+                    setAssignUnitId(person?.homeOrgUnit?.id ?? data.flat[0]?.id ?? "");
+                    const saved = person?.orgAssignments.find(
+                      (assignment) => assignment.orgUnitId === person.homeOrgUnit?.id
+                    );
+                    if (saved && saved.permissions.length > 0) {
+                      setPermissions(saved.permissions);
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "Select..." },
+                    ...data.people.map((person) => ({
+                      value: person.id,
+                      label: `${person.name} · ${person.role === "REP" ? "Rep" : "Admin"}`,
+                    })),
+                  ]}
                 />
-              )}
-              {selectedPerson && (
+                <Select
+                  label="Organizational unit"
+                  value={assignUnitId}
+                  onChange={(e) => setAssignUnitId(e.target.value)}
+                  options={[
+                    { value: "", label: "Select a unit" },
+                    ...data.flat.map((unit) => ({
+                      value: unit.id,
+                      label: `${"· ".repeat(unit.depth)}${unit.name} (${unit.typeLabel})`,
+                    })),
+                  ]}
+                />
                 <Select
                   label="Designated manager"
                   value={assignManagerId}
                   onChange={(e) => setAssignManagerId(e.target.value)}
                   options={[
-                    { value: "", label: "Select manager..." },
+                    {
+                      value: "",
+                      label: selectedPerson?.role === "REP" ? "Required for reps" : "None",
+                    },
                     ...data.people
-                      .filter((p) => p.id !== assignUserId)
-                      .map((p) => ({
-                        value: p.id,
-                        label: `${p.name} · ${p.role === "REP" ? "Rep" : "Admin"}`,
+                      .filter((person) => person.id !== assignUserId)
+                      .map((person) => ({
+                        value: person.id,
+                        label: `${person.name} · ${person.role === "REP" ? "Rep" : "Admin"}`,
                       })),
                   ]}
                 />
-              )}
+              </div>
               {selectedPerson?.role === "COMPANY_ADMIN" && (
                 <div>
                   <p className="mb-2 text-sm font-medium text-slate-700">Permissions</p>
                   <p className="mb-2 text-xs text-slate-500">
-                    Never includes patient information.
+                    Apply to this unit and every child unit. Patient information is never included.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {PERMISSION_OPTIONS.map((opt) => (
@@ -293,7 +385,7 @@ export function CompanyOrgPage({
                         onClick={() =>
                           setPermissions((prev) =>
                             prev.includes(opt.id)
-                              ? prev.filter((p) => p !== opt.id)
+                              ? prev.filter((permission) => permission !== opt.id)
                               : [...prev, opt.id]
                           )
                         }
@@ -312,10 +404,9 @@ export function CompanyOrgPage({
               )}
               <Button
                 type="submit"
-                className="w-full"
                 disabled={
                   !assignUserId ||
-                  !resolvedAssignRole ||
+                  !assignUnitId ||
                   (selectedPerson?.role === "REP" && !assignManagerId)
                 }
               >

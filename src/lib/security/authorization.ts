@@ -26,18 +26,14 @@ export const ADMIN_PERMISSIONS = {
   MANAGE_TERRITORY: "MANAGE_TERRITORY",
 } as const;
 
-/** Suggested org-unit type labels — never enforced as an enum. */
+/** Suggested org-unit type labels. Companies can use any other name. */
 export const ORG_UNIT_TYPE_SUGGESTIONS = [
-  "Rep",
-  "Team Lead",
-  "Senior Rep",
-  "Field Rep",
-  "Sales Lead",
-  "Sales Manager",
-  "Territory Manager",
-  "District Manager",
-  "President",
-  "Admin",
+  "Company",
+  "Division",
+  "Region",
+  "Area",
+  "Territory",
+  "Team",
 ] as const;
 
 export const CUSTOM_ORG_UNIT_TYPE_VALUE = "__custom__";

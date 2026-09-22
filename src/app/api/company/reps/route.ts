@@ -14,6 +14,7 @@ import { logPermissionChange } from "@/lib/security/audit";
 import { setRepSiteCoverage } from "@/lib/healthcare-sites/service";
 import {
   assertOrgUnitInCompany,
+  ensureCompanyRootOrgUnit,
   getScopedRepIds,
   requireRepManager,
   resolveAdminScope,
@@ -149,15 +150,13 @@ export async function POST(request: Request) {
       companyId,
     });
 
-    let orgUnitId = data.orgUnitId ?? null;
-    if (orgUnitId) {
-      await assertOrgUnitInCompany(orgUnitId, companyId);
-      if (scope && !unitInScope(scope, orgUnitId)) {
-        return NextResponse.json(
-          { error: "Organizational unit is outside your scope" },
-          { status: 403 }
-        );
-      }
+    let orgUnitId = data.orgUnitId ?? (await ensureCompanyRootOrgUnit(companyId)).id;
+    await assertOrgUnitInCompany(orgUnitId, companyId);
+    if (scope && !unitInScope(scope, orgUnitId)) {
+      return NextResponse.json(
+        { error: "Organizational unit is outside your scope" },
+        { status: 403 }
+      );
     }
 
     const passwordHash = await bcrypt.hash(data.password, 12);

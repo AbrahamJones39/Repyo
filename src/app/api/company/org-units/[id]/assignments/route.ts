@@ -3,13 +3,14 @@ import { db } from "@/lib/db";
 import {
   ADMIN_PERMISSIONS,
   DEFAULT_ADMIN_SCOPE_PERMISSIONS,
+  SECURITY_PERMISSIONS,
   hasAdminPermission,
 } from "@/lib/security/authorization";
 import { logPermissionChange } from "@/lib/security/audit";
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import {
   assertManagerInCompany,
-  ensureOrgUnitOfType,
+  assertNoManagerCycle,
   resolveAdminScope,
   scopeHasPermission,
   unitInScope,
@@ -49,7 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
       companyId: scope.companyId,
       role: { in: ["COMPANY_ADMIN", "REP"] },
     },
-    select: { id: true, role: true, orgUnitId: true, managerId: true },
+    select: { id: true, role: true, orgUnitId: true, managerId: true, adminPermissions: true },
   });
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -75,6 +76,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (nextManagerId) {
     try {
       await assertManagerInCompany(nextManagerId, scope.companyId);
+      await assertNoManagerCycle(parsed.data.userId, nextManagerId);
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid designated manager" },
@@ -89,33 +91,19 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  let orgUnitId = requestedUnitId;
-  if (parsed.data.typeLabel) {
-    const managerUnit = nextManagerId
-      ? await db.user.findFirst({
-          where: { id: nextManagerId, companyId: scope.companyId },
-          select: { orgUnitId: true },
-        })
-      : null;
-    const parentId =
-      managerUnit?.orgUnitId && unitInScope(scope, managerUnit.orgUnitId)
-        ? managerUnit.orgUnitId
-        : requestedUnitId;
-
-    const roleUnit = await ensureOrgUnitOfType({
-      companyId: scope.companyId,
-      typeLabel: parsed.data.typeLabel,
-      parentId,
-      preferUnitId: target.orgUnitId,
-      scopedUnitIds: scope.isCompanyWide ? undefined : scope.unitIds,
-    });
-    orgUnitId = roleUnit.id;
-  }
-
-  const permissions =
+  const orgUnitId = requestedUnitId;
+  const allowedPermissions = new Set<string>(Object.values(ADMIN_PERMISSIONS));
+  const requestedPermissions =
     parsed.data.permissions && parsed.data.permissions.length > 0
       ? parsed.data.permissions
       : [...DEFAULT_ADMIN_SCOPE_PERMISSIONS];
+  const permissions = requestedPermissions.filter((permission) =>
+    allowedPermissions.has(permission)
+  );
+
+  await db.orgUnitAssignment.deleteMany({
+    where: { userId: parsed.data.userId, orgUnitId: { not: orgUnitId } },
+  });
 
   const assignment = await db.orgUnitAssignment.upsert({
     where: { orgUnitId_userId: { orgUnitId, userId: parsed.data.userId } },
@@ -131,7 +119,20 @@ export async function POST(request: Request, context: RouteContext) {
 
   await db.user.update({
     where: { id: parsed.data.userId },
-    data: { orgUnitId, managerId: nextManagerId },
+    data: {
+      orgUnitId,
+      managerId: nextManagerId,
+      ...(target.role === "COMPANY_ADMIN"
+        ? {
+            adminPermissions: [
+              ...permissions,
+              ...target.adminPermissions.filter((permission) =>
+                (Object.values(SECURITY_PERMISSIONS) as string[]).includes(permission)
+              ),
+            ],
+          }
+        : {}),
+    },
   });
 
   await logPermissionChange({

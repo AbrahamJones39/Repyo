@@ -33,6 +33,18 @@ export function RepDashboard({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [forwardRequestId, setForwardRequestId] = useState<string | null>(null);
+  const [teamMetrics, setTeamMetrics] = useState<{
+    reportCount: number;
+    reports?: string[];
+    phiIncluded: false;
+    totals: {
+      all: number;
+      active: number;
+      completed: number;
+      escalated: number;
+      available: number;
+    } | null;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -59,6 +71,20 @@ export function RepDashboard({
     fetchJson<{ id: string; name: string; products: string[] }[]>("/api/companies")
       .then((data) => setCompanies(Array.isArray(data) ? data : []))
       .catch(() => setCompanies([]));
+    fetchJson<{
+      reportCount: number;
+      reports?: string[];
+      phiIncluded: false;
+      totals: {
+        all: number;
+        active: number;
+        completed: number;
+        escalated: number;
+        available: number;
+      } | null;
+    }>("/api/rep/team-metrics")
+      .then(setTeamMetrics)
+      .catch(() => setTeamMetrics(null));
     return () => es.close();
   }, [loadData]);
 
@@ -175,6 +201,33 @@ export function RepDashboard({
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {teamMetrics && teamMetrics.reportCount > 0 && teamMetrics.totals && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="font-semibold text-slate-900">People you oversee</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Operational metrics for your reporting line. Patient information is not included.
+            A missed request reroutes to the designated manager.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-5">
+            {[
+              { label: "Reps", value: teamMetrics.reportCount },
+              { label: "Available", value: teamMetrics.totals.available },
+              { label: "Active cases", value: teamMetrics.totals.active },
+              { label: "Completed", value: teamMetrics.totals.completed },
+              { label: "Escalated", value: teamMetrics.totals.escalated },
+            ].map((item) => (
+              <div key={item.label}>
+                <p className="text-xs text-slate-500">{item.label}</p>
+                <p className="text-xl font-bold text-slate-900">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {teamMetrics.reports && teamMetrics.reports.length > 0 && (
+            <p className="mt-3 text-sm text-slate-600">{teamMetrics.reports.join(", ")}</p>
+          )}
+        </div>
       )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">

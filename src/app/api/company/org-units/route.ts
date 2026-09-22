@@ -113,6 +113,9 @@ export async function GET() {
         orgUnitId: true,
         manager: { select: { id: true, name: true, role: true } },
         homeOrgUnit: { select: { id: true, name: true, typeLabel: true } },
+        orgAssignments: {
+          select: { orgUnitId: true, permissions: true },
+        },
       },
       orderBy: { name: "asc" },
     }),

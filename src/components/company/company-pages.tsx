@@ -398,16 +398,22 @@ function AddRepModal({
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [selectedSites, setSelectedSites] = useState<HealthcareSiteOption[]>([]);
   const [managers, setManagers] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [orgUnits, setOrgUnits] = useState<
+    { id: string; name: string; typeLabel: string; depth: number }[]
+  >([]);
 
   useEffect(() => {
     fetchJson<{
       people: { id: string; name: string; role: string }[];
+      flat: { id: string; name: string; typeLabel: string; depth: number }[];
     }>("/api/company/org-units")
       .then((data) => {
         setManagers(data.people ?? []);
+        setOrgUnits(data.flat ?? []);
       })
       .catch(() => {
         setManagers([]);
+        setOrgUnits([]);
       });
   }, []);
 
@@ -440,6 +446,7 @@ function AddRepModal({
           password: form.get("password"),
           phone: form.get("phone") || undefined,
           managerId: form.get("managerId"),
+          orgUnitId: form.get("orgUnitId") || undefined,
           credentialStatus: form.get("credentialStatus"),
           status: form.get("status"),
           products: selectedProducts,
@@ -500,8 +507,25 @@ function AddRepModal({
             ]}
           />
           <p className="-mt-2 text-xs text-slate-500">
-            Required. Missed requests escalate to this manager.
+            Required. A missed request is rerouted to this manager.
           </p>
+
+          <Select
+            label="Organizational unit"
+            name="orgUnitId"
+            required={orgUnits.length > 0}
+            defaultValue={orgUnits.find((unit) => unit.depth === 0)?.id ?? orgUnits[0]?.id ?? ""}
+            options={[
+              {
+                value: "",
+                label: orgUnits.length ? "Select a unit" : "Company unit will be assigned",
+              },
+              ...orgUnits.map((unit) => ({
+                value: unit.id,
+                label: `${"· ".repeat(unit.depth)}${unit.name} (${unit.typeLabel})`,
+              })),
+            ]}
+          />
 
           <FacilitySearchPicker
             selected={selectedSites}

@@ -492,6 +492,22 @@ export async function assertManagerInCompany(
   return manager;
 }
 
+export async function assertNoManagerCycle(userId: string, managerId: string) {
+  const seen = new Set<string>([userId]);
+  let current: string | null = managerId;
+  while (current) {
+    if (seen.has(current)) {
+      throw new Error("That manager would create a reporting loop");
+    }
+    seen.add(current);
+    const row: { managerId: string | null } | null = await db.user.findUnique({
+      where: { id: current },
+      select: { managerId: true },
+    });
+    current = row?.managerId ?? null;
+  }
+}
+
 export async function requireRepManager(params: {
   managerId?: string | null;
   companyId: string;

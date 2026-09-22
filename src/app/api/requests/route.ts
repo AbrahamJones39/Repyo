@@ -33,6 +33,11 @@ export async function GET() {
       return NextResponse.json({ error: "Company not found" }, { status: 403 });
     }
 
+    if (session.user.role === "REP" || session.user.role === "COMPANY_ADMIN") {
+      const { escalateMissedRequests } = await import("@/lib/escalation");
+      await escalateMissedRequests().catch(() => undefined);
+    }
+
     let where: Record<string, unknown> = {};
 
     if (session.user.role === "PROVIDER") {
