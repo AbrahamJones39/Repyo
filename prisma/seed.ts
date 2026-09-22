@@ -51,10 +51,10 @@ const DEVICE_COMPANIES: DeviceCompanySeed[] = [
     manufacturerAliases: ["AtriCure Inc"],
   },
   {
-    name: "Biotronik",
+    name: "BIOTRONIK",
     slug: "biotronik",
     products: ["PPM", "ICD", "CRT-D", "CRT-P", "Loop"],
-    manufacturerAliases: ["BIOTRONIK", "Biotronik SE"],
+    manufacturerAliases: ["Biotronik", "Biotronik SE"],
   },
   {
     name: "Boston Scientific",
