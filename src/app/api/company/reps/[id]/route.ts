@@ -11,6 +11,7 @@ import {
   unitInScope,
   userIsInAdminScope,
 } from "@/lib/org-scope";
+import { syncTerritoryGrant } from "@/lib/authorization/scope-grants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -104,6 +105,16 @@ export async function PATCH(request: Request, context: RouteContext) {
         homeOrgUnit: { select: { id: true, name: true } },
       },
     });
+
+    if (updated.homeOrgUnit && updated.orgUnitId !== member.orgUnitId) {
+      await syncTerritoryGrant({
+        userId: id,
+        companyId: member.companyId,
+        territoryLabel: updated.homeOrgUnit.name,
+        grantedById: session.user.id,
+        ownerLabel: session.user.name,
+      });
+    }
 
     await logPermissionChange({
       targetUserId: id,

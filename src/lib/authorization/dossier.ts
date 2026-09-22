@@ -25,6 +25,8 @@ export type AuthorizationDossier = {
     verificationSource: string | null;
     accountStatus: string;
     lastVerified: string | null;
+    companyStatus: string;
+    authorizationEffective: string | null;
     jobTitle: string | null;
     isOrgAdministrator: boolean;
   };
@@ -109,6 +111,7 @@ export async function buildAuthorizationDossier(
       repProfile: {
         include: { territories: true },
       },
+      homeOrgUnit: { select: { name: true } },
     },
   });
 
@@ -182,19 +185,73 @@ export async function buildAuthorizationDossier(
     user.providerInfo?.identityVerifiedAt?.toISOString() ??
     null;
 
+  const labelOf = (metadata: unknown) => {
+    if (metadata && typeof metadata === "object" && "label" in metadata) {
+      const label = (metadata as { label?: unknown }).label;
+      return typeof label === "string" ? label : "";
+    }
+    return "";
+  };
+  const effectiveOf = (metadata: unknown, grantedAt: Date) => {
+    if (metadata && typeof metadata === "object" && "effectiveAt" in metadata) {
+      const value = (metadata as { effectiveAt?: unknown }).effectiveAt;
+      if (typeof value === "string") return value;
+    }
+    return grantedAt.toISOString();
+  };
+  const shortDate = (iso: string) => {
+    const date = new Date(iso);
+    return `${date.getMonth() + 1}/${date.getDate()}/${String(date.getFullYear()).slice(2)}`;
+  };
+
+  const activeGrants = grants.filter((grant) => grant.revokedAt == null);
+  const territoryGrants = activeGrants.filter((grant) => grant.grantType === "TERRITORY");
+  const productGrants = activeGrants.filter((grant) => grant.grantType === "PRODUCT");
+
   const territories =
-    user.repProfile?.territories.map((t) => ({
-      label: formatTerritoryLabel(t),
-      source: "Rep profile",
-      note: "Territory grant lineage will attach here in a future release.",
-    })) ?? [];
+    territoryGrants.length > 0
+      ? territoryGrants.map((grant) => {
+          const effective = effectiveOf(grant.metadata, grant.grantedAt);
+          return {
+            label: labelOf(grant.metadata) || "Territory",
+            source: grant.ownerLabel || grant.grantedBy?.name || "Administrator grant",
+            note: `Authorization effective ${shortDate(effective)}`,
+          };
+        })
+      : user.homeOrgUnit
+        ? [
+            {
+              label: user.homeOrgUnit.name,
+              source: "Organization assignment",
+              note: "Owner is recorded when an administrator assigns this unit.",
+            },
+          ]
+        : (user.repProfile?.territories.map((t) => ({
+            label: formatTerritoryLabel(t),
+            source: "Rep profile",
+            note: "Owner is recorded when an administrator assigns a territory.",
+          })) ?? []);
 
   const products =
-    user.repProfile?.products.map((p) => ({
-      label: p,
-      source: user.company?.name ?? "Company roster",
-      note: "Product authorization grants will attach here in a future release.",
-    })) ?? [];
+    productGrants.length > 0
+      ? productGrants.map((grant) => {
+          const effective = effectiveOf(grant.metadata, grant.grantedAt);
+          return {
+            label: labelOf(grant.metadata) || "Product",
+            source: grant.ownerLabel || grant.grantedBy?.name || "Administrator grant",
+            note: `Authorization effective ${shortDate(effective)}`,
+          };
+        })
+      : (user.repProfile?.products.map((product) => ({
+          label: product,
+          source: user.company?.name ?? "Company",
+          note: "Owner is recorded when products are saved by an administrator.",
+        })) ?? []);
+
+  const authorizationEffective =
+    [...territoryGrants, ...productGrants]
+      .map((grant) => effectiveOf(grant.metadata, grant.grantedAt))
+      .sort()[0] ?? lastVerified;
 
   return {
     user: {
@@ -216,6 +273,8 @@ export async function buildAuthorizationDossier(
       verificationSource,
       accountStatus,
       lastVerified,
+      companyStatus: user.accountState === "VERIFIED" ? "Verified" : user.accountState,
+      authorizationEffective,
       jobTitle,
       isOrgAdministrator,
     },

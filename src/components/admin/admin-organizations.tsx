@@ -23,6 +23,9 @@ interface Organization {
   approvedEmailDomains: string[];
   ssoEnabled: boolean;
   scimEnabled: boolean;
+  ssoIssuer?: string | null;
+  ssoClientId?: string | null;
+  ssoSecretSet?: boolean;
   _count: { providers: number; accessRequests: number };
   facilities: { id: string; name: string }[];
 }
@@ -50,6 +53,9 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
   const [domainDrafts, setDomainDrafts] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [rosterText, setRosterText] = useState("");
+  const [rosterNote, setRosterNote] = useState("");
+  const [issuedToken, setIssuedToken] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -298,7 +304,79 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
                 </div>
 
                 {expandedOrg === org.id && (
-                  <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">Preapproved roster</p>
+                      <textarea
+                        className="mt-2 min-h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        value={rosterText}
+                        onChange={(e) => setRosterText(e.target.value)}
+                        placeholder="jane@hospital.org, Jane Smith, Surgeon"
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="mt-2"
+                        onClick={async () => {
+                          try {
+                            await fetchJson(`/api/admin/organizations/${org.id}/roster`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ text: rosterText }),
+                            });
+                            setRosterNote("Roster imported.");
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Roster import failed");
+                          }
+                        }}
+                      >
+                        Import roster
+                      </Button>
+                      {rosterNote && (
+                        <p className="mt-2 text-xs text-emerald-700">{rosterNote}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={async () => {
+                          const data = await fetchJson<{ token: string; endpoint: string }>(
+                            `/api/admin/organizations/${org.id}/directory-token`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ kind: "scim" }),
+                            }
+                          );
+                          setIssuedToken(`${data.endpoint}\n${data.token}`);
+                        }}
+                      >
+                        Create SCIM token
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={async () => {
+                          const data = await fetchJson<{ token: string; endpoint: string }>(
+                            `/api/admin/organizations/${org.id}/directory-token`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ kind: "directory" }),
+                            }
+                          );
+                          setIssuedToken(`${data.endpoint}\n${data.token}`);
+                        }}
+                      >
+                        Create directory token
+                      </Button>
+                    </div>
+                    {issuedToken && (
+                      <pre className="overflow-x-auto rounded-lg bg-slate-900 px-4 py-3 text-xs text-slate-100">
+                        {issuedToken}
+                      </pre>
+                    )}
                     {orgMembers.length === 0 ? (
                       <p className="text-sm text-slate-500">No members yet.</p>
                     ) : (

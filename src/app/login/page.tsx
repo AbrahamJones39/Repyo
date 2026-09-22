@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,25 @@ function LoginForm() {
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
   const sessionError = searchParams.get("error") === "session";
   const credentialsError = searchParams.get("error") === "CredentialsSignin";
+  const ssoError = searchParams.get("error") === "sso";
+  const ssoTicket = searchParams.get("ssoTicket");
+  const presetEmail = searchParams.get("email") ?? "";
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (!ssoTicket || !presetEmail) return;
+    const safeCallback =
+      callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
+    void signIn("credentials", {
+      email: presetEmail,
+      password: ssoTicket,
+      ssoTicket: "1",
+      callbackUrl: safeCallback,
+    });
+  }, [ssoTicket, presetEmail, callbackUrl]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,12 +76,14 @@ function LoginForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {(sessionError || credentialsError) && (
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+          {(sessionError || credentialsError || ssoError) && (
             <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {credentialsError
                 ? "Invalid email or password."
-                : "Your session expired. Sign in again to continue."}
+                : ssoError
+                  ? "Organization sign-in is not configured for that email, or the identity provider did not complete."
+                  : "Your session expired. Sign in again to continue."}
             </div>
           )}
           {error && (
@@ -80,6 +98,7 @@ function LoginForm() {
             placeholder="you@hospital.org"
             required
             autoComplete="email"
+            defaultValue={presetEmail}
           />
           <div className="space-y-1">
             <label
@@ -113,6 +132,23 @@ function LoginForm() {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in..." : "Sign In"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              const email = String(new FormData(formRef.current!).get("email") ?? "")
+                .trim()
+                .toLowerCase();
+              if (!email.includes("@")) {
+                setError("Enter your work email to sign in with your organization.");
+                return;
+              }
+              window.location.href = `/api/auth/sso/start?email=${encodeURIComponent(email)}`;
+            }}
+          >
+            Sign in with your organization
           </Button>
         </form>
 

@@ -12,6 +12,7 @@ import {
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import { logPermissionChange } from "@/lib/security/audit";
 import { setRepSiteCoverage } from "@/lib/healthcare-sites/service";
+import { syncProductGrants, syncTerritoryGrant } from "@/lib/authorization/scope-grants";
 import {
   assertOrgUnitInCompany,
   ensureCompanyRootOrgUnit,
@@ -198,6 +199,24 @@ export async function POST(request: Request) {
     });
 
     await setRepSiteCoverage(rep.id, data.siteIds);
+    if (rep.homeOrgUnit) {
+      await syncTerritoryGrant({
+        userId: rep.id,
+        companyId,
+        territoryLabel: rep.homeOrgUnit.name,
+        grantedById: session.user.id,
+        ownerLabel: session.user.name,
+      });
+    }
+    if (data.products.length > 0) {
+      await syncProductGrants({
+        userId: rep.id,
+        companyId,
+        products: data.products,
+        grantedById: session.user.id,
+        ownerLabel: session.user.name,
+      });
+    }
 
     await logPermissionChange({
       targetUserId: rep.id,

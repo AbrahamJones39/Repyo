@@ -77,7 +77,16 @@ export function AuthorizationDossierView({
             value={summary.verificationSource ?? "—"}
           />
           <SummaryRow label="Account status" value={summary.accountStatus} />
+          <SummaryRow label="Company status" value={summary.companyStatus} />
           <SummaryRow label="Last verified" value={formatWhen(summary.lastVerified)} />
+          <SummaryRow
+            label="Authorization effective"
+            value={
+              summary.authorizationEffective
+                ? format(new Date(summary.authorizationEffective), "M/d/yy")
+                : "—"
+            }
+          />
           {summary.jobTitle && (
             <SummaryRow label="Job title" value={summary.jobTitle} />
           )}

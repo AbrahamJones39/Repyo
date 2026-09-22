@@ -97,11 +97,39 @@ const nextAuth = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        ssoTicket: { label: "SSO ticket", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).trim().toLowerCase();
+
+        if (credentials.ssoTicket === "1") {
+          const { hashSecret } = await import("@/lib/verification/tokens");
+          const ticket = await db.authTicket.findUnique({
+            where: { tokenHash: hashSecret(credentials.password as string) },
+            include: { user: true },
+          });
+          if (
+            !ticket ||
+            ticket.expiresAt < new Date() ||
+            ticket.user.email !== email ||
+            !isAccountActive(ticket.user.accountState)
+          ) {
+            return null;
+          }
+          await db.authTicket.delete({ where: { id: ticket.id } });
+          return {
+            id: ticket.user.id,
+            email: ticket.user.email,
+            name: ticket.user.name,
+            role: ticket.user.role,
+            companyId: ticket.user.companyId,
+            sessionVersion: ticket.user.sessionVersion,
+            accountState: ticket.user.accountState,
+            adminPermissions: ticket.user.adminPermissions,
+          };
+        }
 
         const globalKill = await isKillSwitchActive("GLOBAL");
         if (globalKill.blocked) return null;

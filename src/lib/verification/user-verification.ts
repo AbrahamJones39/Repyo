@@ -8,6 +8,7 @@ import type {
   VerificationDecision,
 } from "@prisma/client";
 import { emailMatchesApprovedDomain } from "./email-domain";
+import { findActiveDirectoryIdentity } from "./provision";
 import { logPermissionChange } from "@/lib/security/audit";
 import { recordAuthorizationGrant } from "@/lib/authorization/grants";
 
@@ -104,6 +105,8 @@ async function hasRosterEntry(
 }
 
 function orgIsLive(config: TenantVerificationConfig): boolean {
+  if (config.accessEnabled === false) return false;
+  if (!config.status) return true;
   return config.status === "ACTIVATED" || config.status === "VERIFIED";
 }
 
@@ -113,6 +116,7 @@ export function evaluateVerificationMethod(
   options?: {
     hasInvitation?: boolean;
     hasRosterEntry?: boolean;
+    hasDirectoryIdentity?: boolean;
     requireManualApproval?: boolean;
   }
 ): VerificationResult {
@@ -250,7 +254,7 @@ export function evaluateVerificationMethod(
         decision: "REQUIRES_INVITATION",
         accountStatus: "LIMITED",
         userAccountState: "REGISTERED",
-        reason: "This organization uses SSO — sign in through your hospital identity provider",
+        reason: "This organization uses SSO — sign in with your organization",
         source: "SSO_PROVISIONING",
         unusual: false,
       };
@@ -266,13 +270,23 @@ export function evaluateVerificationMethod(
       };
 
     case "API_DIRECTORY_VERIFICATION":
+      if (options?.hasDirectoryIdentity) {
+        return {
+          decision: "AUTO_APPROVED",
+          accountStatus: "ACTIVE",
+          userAccountState: "VERIFIED",
+          reason: "Email matched the organization directory",
+          source: "API_DIRECTORY",
+          unusual: false,
+        };
+      }
       return {
         decision: "PENDING_REVIEW",
         accountStatus: "PENDING_APPROVAL",
         userAccountState: "REGISTERED",
-        reason: "Pending directory verification with organization systems",
+        reason: "Not in the organization directory — sent to an administrator",
         source: "API_DIRECTORY",
-        unusual: false,
+        unusual: true,
       };
 
     case "MANUAL_ADMIN_APPROVAL":
@@ -298,7 +312,7 @@ export async function verifyProviderSignup(
   });
   if (!org) return null;
 
-  const [invitation, rosterEntry] = await Promise.all([
+  const [invitation, rosterEntry, directoryIdentity] = await Promise.all([
     resolvePendingInvitation(
       context.email,
       org.id,
@@ -306,6 +320,7 @@ export async function verifyProviderSignup(
       context.invitationToken
     ),
     hasRosterEntry(context.email, org.id),
+    findActiveDirectoryIdentity(context.email, org.id, null),
   ]);
 
   const result = evaluateVerificationMethod(
@@ -322,6 +337,7 @@ export async function verifyProviderSignup(
     {
       hasInvitation: Boolean(invitation),
       hasRosterEntry: Boolean(rosterEntry),
+      hasDirectoryIdentity: Boolean(directoryIdentity),
       requireManualApproval: context.requireManualApproval,
     }
   );
@@ -352,7 +368,7 @@ export async function verifyCompanySignup(
   });
   if (!company) return null;
 
-  const [invitation, rosterEntry] = await Promise.all([
+  const [invitation, rosterEntry, directoryIdentity] = await Promise.all([
     resolvePendingInvitation(
       context.email,
       null,
@@ -360,6 +376,7 @@ export async function verifyCompanySignup(
       context.invitationToken
     ),
     hasRosterEntry(context.email, null, company.id),
+    findActiveDirectoryIdentity(context.email, null, company.id),
   ]);
 
   const result = evaluateVerificationMethod(
@@ -375,6 +392,7 @@ export async function verifyCompanySignup(
     {
       hasInvitation: Boolean(invitation),
       hasRosterEntry: Boolean(rosterEntry),
+      hasDirectoryIdentity: Boolean(directoryIdentity),
       requireManualApproval: context.requireManualApproval,
     }
   );

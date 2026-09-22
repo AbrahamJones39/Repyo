@@ -250,6 +250,7 @@ model User {
   forwardsReceived        RequestForward[]         @relation("ForwardRecipient")
   forwardsAsOriginal      RequestForward[]         @relation("ForwardOriginalRep")
   requestReplies          RequestReply[]
+  authTickets             AuthTicket[]
 }
 
 model Company {
@@ -274,6 +275,11 @@ model Company {
   approvedEmailDomains        String[] @default([])
   ssoEnabled                  Boolean  @default(false)
   scimEnabled                 Boolean  @default(false)
+  scimTokenHash               String?
+  directoryTokenHash          String?
+  ssoIssuer                   String?
+  ssoClientId                 String?
+  ssoClientSecretEnc          String?
   forwardEnabled              Boolean  @default(true)
   forwardTeamMembersOnly      Boolean  @default(false)
   forwardAllowManagers        Boolean  @default(true)
@@ -286,6 +292,7 @@ model Company {
   authorizationGrants AuthorizationGrant[]
   verificationEvents  UserVerificationEvent[]
   rosterEntries       PreapprovedRosterEntry[]
+  directoryIdentities DirectoryIdentity[]
   invitations         PlatformInvitation[]
   teams               CompanyTeam[]
   orgUnits            OrgUnit[]
@@ -358,6 +365,11 @@ model ProviderOrganization {
   approvedEmailDomains   String[]               @default([])
   ssoEnabled             Boolean                @default(false)
   scimEnabled            Boolean                @default(false)
+  scimTokenHash          String?
+  directoryTokenHash     String?
+  ssoIssuer              String?
+  ssoClientId            String?
+  ssoClientSecretEnc     String?
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
 
@@ -367,6 +379,7 @@ model ProviderOrganization {
   authorizationGrants AuthorizationGrant[]
   verificationEvents  UserVerificationEvent[]
   rosterEntries       PreapprovedRosterEntry[]
+  directoryIdentities DirectoryIdentity[]
   invitations         PlatformInvitation[]
   siteLinks           OrganizationSiteLink[]
   providerSiteMemberships ProviderSiteMembership[]
@@ -982,6 +995,36 @@ model UserVerificationEvent {
   @@index([userId, createdAt])
   @@index([organizationId])
   @@index([companyId])
+}
+
+model DirectoryIdentity {
+  id             String              @id @default(uuid())
+  companyId      String?
+  organizationId String?
+  email          String
+  externalId     String?
+  name           String?
+  active         Boolean             @default(true)
+  source         AuthorizationSource
+  syncedAt       DateTime            @default(now())
+
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization ProviderOrganization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email, companyId])
+  @@index([email, organizationId])
+}
+
+model AuthTicket {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model PreapprovedRosterEntry {

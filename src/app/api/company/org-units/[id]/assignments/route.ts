@@ -17,6 +17,7 @@ import {
   userIsInAdminScope,
 } from "@/lib/org-scope";
 import { orgUnitAssignmentSchema } from "@/lib/validations";
+import { syncTerritoryGrant } from "@/lib/authorization/scope-grants";
 import { NextResponse } from "next/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -134,6 +135,20 @@ export async function POST(request: Request, context: RouteContext) {
         : {}),
     },
   });
+
+  const unit = await db.orgUnit.findUnique({
+    where: { id: orgUnitId },
+    select: { name: true, companyId: true },
+  });
+  if (unit) {
+    await syncTerritoryGrant({
+      userId: parsed.data.userId,
+      companyId: unit.companyId,
+      territoryLabel: unit.name,
+      grantedById: session.user.id,
+      ownerLabel: session.user.name,
+    });
+  }
 
   await logPermissionChange({
     targetUserId: parsed.data.userId,

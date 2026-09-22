@@ -6,6 +6,7 @@ import {
   updateRepLocationSchema,
 } from "@/lib/validations";
 import { NextResponse } from "next/server";
+import { syncProductGrants } from "@/lib/authorization/scope-grants";
 
 async function getOrCreateProfile(userId: string) {
   let profile = await db.repProfile.findUnique({
@@ -87,6 +88,15 @@ export async function PATCH(request: Request) {
           ...(lng != null && { lng }),
         },
       });
+      if (products && session.user.companyId) {
+        await syncProductGrants({
+          userId: session.user.id,
+          companyId: session.user.companyId,
+          products,
+          grantedById: session.user.id,
+          ownerLabel: session.user.name,
+        });
+      }
       return NextResponse.json(updated);
     }
 

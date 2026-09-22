@@ -25,7 +25,14 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
-    organizations,
+    organizations: organizations.map(
+      ({ scimTokenHash, directoryTokenHash, ssoClientSecretEnc, ...org }) => ({
+        ...org,
+        scimTokenSet: Boolean(scimTokenHash),
+        directoryTokenSet: Boolean(directoryTokenHash),
+        ssoSecretSet: Boolean(ssoClientSecretEnc),
+      })
+    ),
     accessLeads: accessRequests.map((r) => ({
       organizationName: r.requestedOrgName,
       requestCount: r._count.id,

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { updateOwnProfileSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
 import type { Prisma, Role } from "@prisma/client";
+import { syncProductGrants } from "@/lib/authorization/scope-grants";
 
 const profileSelect = {
   id: true,
@@ -152,6 +153,15 @@ export async function PATCH(request: Request) {
           },
           update: repData,
         });
+        if (data.products !== undefined && session.user.companyId) {
+          await syncProductGrants({
+            userId,
+            companyId: session.user.companyId,
+            products: data.products,
+            grantedById: userId,
+            ownerLabel: session.user.name,
+          });
+        }
       }
     }
 

@@ -25,6 +25,8 @@ export const GRANT_TYPE_LABELS: Record<string, string> = {
   ORG_ADMINISTRATOR: "Organization administrator",
   COMPANY_ACCOUNT_ACCESS: "Company account access",
   COMPANY_ADMIN_PERMISSION: "Company admin permissions",
+  TERRITORY: "Territory",
+  PRODUCT: "Product authorization",
 };
 
 export function formatVerificationMethod(method: string) {
