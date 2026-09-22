@@ -223,8 +223,8 @@ export function FacilitySearchPicker({
               className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4"
             >
               <p className="text-xs font-medium text-slate-600">
-                New facilities are deduplicated and reviewed before appearing for
-                everyone.
+                New facilities are submitted for super admin review. They stay
+                hidden from everyone else until approved.
               </p>
               <Input
                 label="Facility name"

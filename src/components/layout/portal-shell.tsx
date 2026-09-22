@@ -72,6 +72,7 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
       { href: "/admin", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" /> },
       { href: "/admin/tenants", label: "Tenants", icon: <Building2 className="h-4 w-4" /> },
       { href: "/admin/organizations", label: "Provider Orgs", icon: <Stethoscope className="h-4 w-4" /> },
+      { href: "/admin/facilities", label: "Facilities", icon: <MapPin className="h-4 w-4" /> },
       { href: "/admin/security", label: "Security", icon: <Building2 className="h-4 w-4" /> },
       { href: "/admin/users", label: "Users", icon: <Users className="h-4 w-4" /> },
       { href: "/admin/profile", label: "My Profile", icon: <CircleUser className="h-4 w-4" /> },

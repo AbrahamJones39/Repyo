@@ -336,6 +336,7 @@ enum HealthcareSiteStatus {
   ACTIVE
   PENDING_REVIEW
   MERGED
+  REJECTED
 }
 
 model ProviderOrganization {
