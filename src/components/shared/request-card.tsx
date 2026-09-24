@@ -116,11 +116,21 @@ export function RequestCard({
       setLocalRequest((prev) => ({ ...prev, ...detail, acknowledgedAt: detail.acknowledgedAt ?? new Date().toISOString() }));
       setExpanded(true);
       onRefresh?.();
+      return true;
     } catch (err) {
       setOpenError(err instanceof Error ? err.message : "Could not acknowledge request");
+      return false;
     } finally {
       setOpening(false);
     }
+  }
+
+  async function respond(action: "ACCEPTED" | "FORWARD" | "DECLINE") {
+    if (!localRequest.acknowledgedAt) {
+      const ok = await acknowledge();
+      if (!ok) return;
+    }
+    onAction?.(action, localRequest.id);
   }
 
   const canManageAsAdmin = role === "company";
@@ -296,22 +306,29 @@ export function RequestCard({
         <p className="mt-2 text-xs text-red-600">{openError}</p>
       )}
 
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
-        {needsAck && (
-          <Button size="lg" className="w-full sm:w-auto" onClick={acknowledge} disabled={opening}>
-            {opening ? "Acknowledging..." : "Acknowledge"}
-          </Button>
+      <div className="mt-auto flex flex-col gap-2 pt-4">
+        {isAssignedRep && localRequest.status === "REQUESTING" && onAction && (
+          <div className="grid gap-2">
+            {needsAck && (
+              <Button size="lg" onClick={acknowledge} disabled={opening}>
+                {opening ? "Acknowledging..." : "Acknowledge"}
+              </Button>
+            )}
+            <Button size="lg" disabled={opening} onClick={() => void respond("ACCEPTED")}>
+              Accept
+            </Button>
+            <Button size="lg" variant="outline" disabled={opening} onClick={() => void respond("FORWARD")}>
+              Forward
+            </Button>
+            <Button size="lg" variant="outline" disabled={opening} onClick={() => void respond("DECLINE")}>
+              Decline
+            </Button>
+          </div>
         )}
 
         {!showPipeline && !needsAck && (
           <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>
             {expanded ? "Hide" : "Track"} Status
-          </Button>
-        )}
-
-        {canManageAsAdmin && localRequest.status === "REQUESTING" && onAction && (
-          <Button size="sm" onClick={() => onAction("ACCEPTED", localRequest.id)}>
-            Accept
           </Button>
         )}
 
@@ -351,29 +368,10 @@ export function RequestCard({
           </div>
         )}
 
-        {canRespond && onAction && (
-          <div className="flex w-full flex-col gap-2 sm:flex-row">
-            <Button size="lg" className="flex-1" onClick={() => onAction("ACCEPTED", localRequest.id)}>
-              Accept
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex-1"
-              onClick={() => onAction("DECLINE", localRequest.id)}
-            >
-              Decline
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex-1"
-              onClick={() => onAction("FORWARD", localRequest.id)}
-            >
-              <ArrowRightLeft className="h-4 w-4" />
-              Forward
-            </Button>
-          </div>
+        {canManageAsAdmin && !isAssignedRep && localRequest.status === "REQUESTING" && onAction && (
+          <Button size="sm" onClick={() => onAction("ACCEPTED", localRequest.id)}>
+            Accept
+          </Button>
         )}
 
         {role === "rep" &&

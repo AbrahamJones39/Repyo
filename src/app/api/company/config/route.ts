@@ -17,6 +17,7 @@ const companyConfigSelect = {
   alertSecondReminderMin: true,
   alertEscalateMin: true,
   alertProviderNoticeMin: true,
+  onCallDndOverrideEnabled: true,
   userVerificationMethod: true,
   approvedEmailDomains: true,
   ssoEnabled: true,
@@ -139,6 +140,9 @@ export async function PATCH(request: Request) {
       : {}),
     ...(parsed.data.alertProviderNoticeMin !== undefined
       ? { alertProviderNoticeMin: parsed.data.alertProviderNoticeMin }
+      : {}),
+    ...(parsed.data.onCallDndOverrideEnabled !== undefined
+      ? { onCallDndOverrideEnabled: parsed.data.onCallDndOverrideEnabled }
       : {}),
     ...(parsed.data.userVerificationMethod !== undefined
       ? { userVerificationMethod: parsed.data.userVerificationMethod }

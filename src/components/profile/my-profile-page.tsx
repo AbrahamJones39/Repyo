@@ -23,7 +23,7 @@ type OwnProfile = {
   zipCodeStart: string | null;
   zipCodeEnd: string | null;
   adminPermissions: string[];
-  company: { id: string; name: string } | null;
+  company: { id: string; name: string; onCallDndOverrideEnabled?: boolean } | null;
   manager: { id: string; name: string; role: string } | null;
   homeOrgUnit: { id: string; name: string; typeLabel: string } | null;
   orgAssignments: {
@@ -35,6 +35,7 @@ type OwnProfile = {
     products: string[];
     credentialStatus: string;
     onCallEnabled: boolean;
+    dndOverrideOptIn?: boolean;
     travelRadiusMiles: number;
     territories: { state: string | null; county: string | null; zipCode: string | null }[];
   } | null;
@@ -145,6 +146,7 @@ export function MyProfilePage({
   const [zipCodeEnd, setZipCodeEnd] = useState("");
   const [status, setStatus] = useState("OFF_DUTY");
   const [onCallEnabled, setOnCallEnabled] = useState(false);
+  const [dndOverrideOptIn, setDndOverrideOptIn] = useState(false);
   const [products, setProducts] = useState<string[]>([]);
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState("");
@@ -178,6 +180,7 @@ export function MyProfilePage({
     setZipCodeEnd(data.zipCodeEnd ?? "");
     setStatus(data.repProfile?.status ?? "OFF_DUTY");
     setOnCallEnabled(data.repProfile?.onCallEnabled ?? false);
+    setDndOverrideOptIn(data.repProfile?.dndOverrideOptIn ?? false);
     setProducts(data.repProfile?.products ?? []);
     const info = data.providerInfo;
     setJobTitle(info?.jobTitle ?? data.providerSiteMemberships[0]?.jobTitle ?? "");
@@ -230,6 +233,7 @@ export function MyProfilePage({
       if (profile?.role === "REP") {
         payload.status = status;
         payload.onCallEnabled = onCallEnabled;
+        payload.dndOverrideOptIn = dndOverrideOptIn;
         payload.products = products;
       }
       if (profile?.role === "PROVIDER") {
@@ -450,6 +454,25 @@ export function MyProfilePage({
                     />
                     Available for on-call coverage
                   </label>
+                  {profile.company?.onCallDndOverrideEnabled ? (
+                    <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={dndOverrideOptIn}
+                        onChange={(e) => setDndOverrideOptIn(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                      />
+                      <span>
+                        Opt in to on-call alert repeats while RepYo is open. This does not
+                        bypass silent or Focus mode.
+                      </span>
+                    </label>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Your company has not enabled an on-call Do Not Disturb override.
+                      Notifications follow the phone&apos;s silent settings.
+                    </p>
+                  )}
                 </div>
                 <ReadOnlyField
                   label="Qualification"

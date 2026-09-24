@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PortalShell } from "@/components/layout/portal-shell";
 import { RequestCard, type RequestData } from "@/components/shared/request-card";
+import { ForwardRequestModal } from "@/components/shared/forward-request-modal";
 import { connectEventSource, fetchJson } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -91,12 +92,20 @@ export function CompanyRequestsPage({
     return () => es.close();
   }, [load]);
 
+  const [forwardRequestId, setForwardRequestId] = useState<string | null>(null);
+
   async function handleAction(action: string, requestId: string) {
+    if (action === "FORWARD") {
+      setForwardRequestId(requestId);
+      return;
+    }
     try {
       await fetchJson(`/api/requests/${requestId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: action }),
+        body: JSON.stringify(
+          action === "DECLINE" ? { action: "DECLINE" } : { status: action }
+        ),
       });
       load();
     } catch (err) {
@@ -229,6 +238,13 @@ export function CompanyRequestsPage({
           ))
         )}
       </div>
+      {forwardRequestId && (
+        <ForwardRequestModal
+          requestId={forwardRequestId}
+          onClose={() => setForwardRequestId(null)}
+          onSuccess={load}
+        />
+      )}
     </PortalShell>
   );
 }

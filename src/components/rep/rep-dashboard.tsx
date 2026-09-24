@@ -259,6 +259,10 @@ export function RepDashboard({
           >
             {onCall ? "On Call — Active" : "Off Call"}
           </button>
+          <p className="mt-2 text-xs text-slate-500">
+            On call does not bypass silent or Focus mode. A louder in-app repeat is available
+            only if your company enables it and you opt in on your profile.
+          </p>
         </div>
       </div>
 

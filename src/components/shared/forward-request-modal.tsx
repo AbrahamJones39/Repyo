@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { fetchJson } from "@/lib/api-client";
+import { FORWARD_REASONS } from "@/lib/forward-reasons";
 import { cn } from "@/lib/utils";
 
 type ForwardTarget = {
@@ -18,10 +19,10 @@ type ForwardTarget = {
   teamId?: string;
 };
 
-type ForwardTeamGroup = {
+type TeamDestination = {
   id: string;
   name: string;
-  members: ForwardTarget[];
+  forwardToId: string;
 };
 
 export function ForwardRequestModal({
@@ -37,21 +38,22 @@ export function ForwardRequestModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("");
+  const [reasonNote, setReasonNote] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>();
   const [reps, setReps] = useState<ForwardTarget[]>([]);
-  const [teams, setTeams] = useState<ForwardTeamGroup[]>([]);
+  const [teams, setTeams] = useState<TeamDestination[]>([]);
   const [managers, setManagers] = useState<ForwardTarget[]>([]);
 
   useEffect(() => {
     fetchJson<{
       reps: ForwardTarget[];
-      teams: ForwardTeamGroup[];
+      teamDestinations?: TeamDestination[];
       managers: ForwardTarget[];
     }>(`/api/requests/${requestId}/forward-targets`)
       .then((data) => {
         setReps(data.reps ?? []);
-        setTeams(data.teams ?? []);
+        setTeams(data.teamDestinations ?? []);
         setManagers(data.managers ?? []);
       })
       .catch((err) => {
@@ -71,7 +73,8 @@ export function ForwardRequestModal({
         body: JSON.stringify({
           action: "FORWARD",
           forwardedToId: selectedId,
-          reason: reason.trim() || undefined,
+          reason: reason || undefined,
+          reasonNote: reason === "Other" ? reasonNote.trim() || undefined : undefined,
           targetTeamId: selectedTeamId,
         }),
       });
@@ -113,12 +116,9 @@ export function ForwardRequestModal({
         />
         <div className="min-w-0">
           <p className="font-medium text-slate-900">
-            {target.name}
-            {target.type === "manager" ? " — Manager/Dispatcher" : ""}
-          </p>
-          <p className="text-xs text-slate-600">
-            {target.territoryLabel} · {target.statusLabel}
-            {target.teamNames.length > 0 ? ` · ${target.teamNames.join(", ")}` : ""}
+            {target.type === "manager"
+              ? `${target.name} — Manager/Dispatcher`
+              : `${target.name} — ${target.territoryLabel} — ${target.statusLabel}`}
           </p>
         </div>
       </label>
@@ -133,7 +133,7 @@ export function ForwardRequestModal({
         onClick={onClose}
         aria-label="Close"
       />
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+      <div className="relative z-[80] flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="font-semibold text-slate-900">Forward Request</h2>
@@ -155,42 +155,38 @@ export function ForwardRequestModal({
             <p className="text-sm text-slate-500">Loading eligible reps...</p>
           ) : (
             <>
-              {reps.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Company reps
-                  </p>
-                  {reps.map((rep) => (
-                    <TargetOption key={rep.id} target={rep} />
-                  ))}
-                </div>
-              )}
-
-              {teams.map((team) => (
-                <div key={team.id} className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {team.name}
-                  </p>
-                  {team.members.map((member) => (
-                    <TargetOption
-                      key={`${team.id}-${member.id}`}
-                      target={member}
-                      teamId={team.id}
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {managers.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Send to Manager/Dispatcher
-                  </p>
-                  {managers.map((manager) => (
-                    <TargetOption key={manager.id} target={manager} />
-                  ))}
-                </div>
-              )}
+              <div className="space-y-2">
+                {reps.map((rep) => (
+                  <TargetOption key={rep.id} target={rep} />
+                ))}
+                {teams.map((team) => {
+                  const selected = selectedId === team.forwardToId && selectedTeamId === team.id;
+                  return (
+                    <label
+                      key={team.id}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3",
+                        selected ? "border-rose-400 bg-rose-50" : "border-slate-200"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="forwardTarget"
+                        checked={selected}
+                        onChange={() => {
+                          setSelectedId(team.forwardToId);
+                          setSelectedTeamId(team.id);
+                        }}
+                        className="mt-1"
+                      />
+                      <p className="font-medium text-slate-900">{team.name}</p>
+                    </label>
+                  );
+                })}
+                {managers.map((manager) => (
+                  <TargetOption key={manager.id} target={manager} />
+                ))}
+              </div>
 
               {reps.length === 0 && teams.length === 0 && managers.length === 0 && (
                 <p className="text-sm text-slate-500">
@@ -198,13 +194,29 @@ export function ForwardRequestModal({
                 </p>
               )}
 
-              <Textarea
-                label="Reason (optional)"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Coverage gap, schedule conflict, closer to facility..."
-                rows={3}
-              />
+              <label className="block text-sm">
+                <span className="font-medium text-slate-700">Reason (optional)</span>
+                <select
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                >
+                  <option value="">No reason</option>
+                  {FORWARD_REASONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {reason === "Other" && (
+                <Textarea
+                  label="Details"
+                  value={reasonNote}
+                  onChange={(e) => setReasonNote(e.target.value)}
+                  rows={2}
+                />
+              )}
             </>
           )}
 

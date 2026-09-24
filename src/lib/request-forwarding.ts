@@ -269,6 +269,7 @@ export async function getForwardTargets(
   reps: ForwardTarget[];
   teams: ForwardTeamGroup[];
   managers: ForwardTarget[];
+  teamDestinations: { id: string; name: string; forwardToId: string }[];
 }> {
   const request = await db.serviceRequest.findUnique({
     where: { id: requestId },
@@ -284,7 +285,7 @@ export async function getForwardTargets(
   });
 
   if (!request?.company.forwardEnabled) {
-    return { reps: [], teams: [], managers: [] };
+    return { reps: [], teams: [], managers: [], teamDestinations: [] };
   }
 
   const senderTeamIds = await getRepTeamIds(forwardedById);
@@ -440,7 +441,15 @@ export async function getForwardTargets(
     }
   }
 
-  return { reps: repTargets, teams, managers };
+  const teamDestinations = teamMemberships
+    .filter((membership) => membership.team.managerUserId !== forwardedById)
+    .map((membership) => ({
+      id: membership.team.id,
+      name: membership.team.name,
+      forwardToId: membership.team.managerUserId,
+    }));
+
+  return { reps: repTargets, teams, managers, teamDestinations };
 }
 
 export async function forwardRequest(params: {
@@ -467,14 +476,15 @@ export async function forwardRequest(params: {
   if (!FORWARDABLE_REQUEST_STATUSES.includes(request.status)) {
     return { ok: false, error: "This request can no longer be forwarded" };
   }
-  if (request.assignedRepId !== params.forwardedById) {
-    return { ok: false, error: "Only the assigned rep can forward this request" };
+  const assigneeId = request.assignedRepId ?? request.assignedAdminId;
+  if (assigneeId !== params.forwardedById && request.escalatedToId !== params.forwardedById) {
+    return { ok: false, error: "Only the assigned person can forward this request" };
   }
   if (!request.company.forwardEnabled) {
     return { ok: false, error: "Forwarding is disabled for this company" };
   }
   if (request.status === "REQUESTING" && !request.acknowledgedAt) {
-    return { ok: false, error: "Open the request before forwarding" };
+    return { ok: false, error: "Acknowledge the request before forwarding" };
   }
 
   const revertingFromAccepted = request.status === "ACCEPTED";

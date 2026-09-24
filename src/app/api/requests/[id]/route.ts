@@ -76,7 +76,15 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const requestForSanitize = serviceRequest;
+  const { acknowledgeCoverage } = await import("@/lib/coverage-alerts");
+  const ack = await acknowledgeCoverage({
+    requestId: id,
+    userId: user.id,
+    userRole: user.role,
+  });
+  const requestForSanitize = ack.ok
+    ? { ...serviceRequest, acknowledgedAt: ack.acknowledgedAt, alertActive: false }
+    : serviceRequest;
 
   const isDelegatedAdmin =
     user.role === "REP" &&
@@ -307,15 +315,20 @@ async function handleForward(
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 
-  if (user.role !== "REP") {
+  if (user.role !== "REP" && user.role !== "COMPANY_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const reason =
+    parsed.data.reason === "Other" && parsed.data.reasonNote
+      ? `Other: ${parsed.data.reasonNote}`
+      : parsed.data.reason;
 
   const result = await forwardRequest({
     requestId,
     forwardedById: user.id,
     forwardedToId: parsed.data.forwardedToId,
-    reason: parsed.data.reason,
+    reason,
     targetTeamId: parsed.data.targetTeamId,
   });
 

@@ -14,6 +14,7 @@ type CompanyConfig = {
   alertSecondReminderMin: number;
   alertEscalateMin: number;
   alertProviderNoticeMin: number;
+  onCallDndOverrideEnabled: boolean;
 };
 
 export function CompanyConfigPanel() {
@@ -72,10 +73,11 @@ export function CompanyConfigPanel() {
 
   return (
     <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
-      <h2 className="font-semibold text-slate-900">Request Forwarding</h2>
+      <h2 className="font-semibold text-slate-900">Forward</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Control how reps can forward pending requests to verified colleagues inside RepYo.
-        Forwarding always requires authorization checks and creates a full audit trail.
+        Forward is a permanent request action. A rep who knows the right person can send
+        the request to a verified colleague in this company. RepYo never accepts an email
+        or phone number. These settings decide which authorized destinations are offered.
       </p>
 
       {error && (
@@ -200,6 +202,40 @@ export function CompanyConfigPanel() {
         }
       >
         {saving ? "Saving..." : "Save Alert Timing"}
+      </Button>
+
+      <h2 className="mt-8 font-semibold text-slate-900">On call / Do Not Disturb</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Off unless you turn it on. A rep must also opt in. This does not bypass iOS Silent
+        or Focus. True critical alerts need Apple entitlement approval and are not enabled.
+        Ordinary notifications still follow the phone&apos;s silent settings. An opted-in
+        on-call rep only gets louder repeats while RepYo is open.
+      </p>
+      <label className="mt-4 flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={config.onCallDndOverrideEnabled}
+          onChange={(e) =>
+            setConfig({ ...config, onCallDndOverrideEnabled: e.target.checked })
+          }
+          className="mt-1"
+        />
+        <span>
+          <span className="font-medium text-slate-900">
+            Allow on-call Do Not Disturb override
+          </span>
+          <span className="mt-0.5 block text-slate-600">
+            Company opt-in. Reps choose separately. RepYo will not turn this on by itself.
+          </span>
+        </span>
+      </label>
+      <Button
+        className="mt-5"
+        variant="outline"
+        disabled={saving}
+        onClick={() => save({ onCallDndOverrideEnabled: config.onCallDndOverrideEnabled })}
+      >
+        {saving ? "Saving..." : "Save On-Call Setting"}
       </Button>
     </div>
   );

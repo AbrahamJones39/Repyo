@@ -1,33 +1,25 @@
-import { requireAuth, isAuthError } from "@/lib/security/require-auth";
-import {
-  FORWARDABLE_REQUEST_STATUSES,
-  getForwardTargets,
-} from "@/lib/request-forwarding";
 import { db } from "@/lib/db";
+import { requireAuth, isAuthError } from "@/lib/security/require-auth";
 import { NextResponse } from "next/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Operational preview for the buzzing screen. No patient or device identifiers. */
 export async function GET(_request: Request, context: RouteContext) {
   const authResult = await requireAuth();
   if (isAuthError(authResult)) return authResult;
   const user = authResult.user;
 
-  if (user.role !== "REP" && user.role !== "COMPANY_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { id } = await context.params;
-
   const request = await db.serviceRequest.findUnique({
     where: { id },
     select: {
+      facilityName: true,
+      scheduledAt: true,
       assignedRepId: true,
       assignedAdminId: true,
       escalatedToId: true,
-      status: true,
       acknowledgedAt: true,
-      company: { select: { forwardEnabled: true } },
     },
   });
 
@@ -36,17 +28,14 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const assigneeId = request.assignedRepId ?? request.assignedAdminId;
-  if (
-    (assigneeId !== user.id && request.escalatedToId !== user.id) ||
-    !FORWARDABLE_REQUEST_STATUSES.includes(request.status)
-  ) {
+  if (assigneeId !== user.id && request.escalatedToId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!request.company.forwardEnabled) {
-    return NextResponse.json({ error: "Forwarding disabled" }, { status: 403 });
-  }
-
-  const targets = await getForwardTargets(id, user.id);
-  return NextResponse.json(targets);
+  return NextResponse.json({
+    facilityName: request.facilityName,
+    scheduledAt: request.scheduledAt,
+    summary: "Device support requested",
+    acknowledged: Boolean(request.acknowledgedAt),
+  });
 }

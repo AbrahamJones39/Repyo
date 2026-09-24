@@ -319,6 +319,8 @@ model Company {
   alertEscalateMin            Int      @default(10)
   /// Minutes after notify before the provider is told coverage is unacknowledged.
   alertProviderNoticeMin      Int      @default(15)
+  /// Company opt-in only. Does not bypass OS silent or Focus modes.
+  onCallDndOverrideEnabled    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -586,6 +588,8 @@ model RepProfile {
   symplrMerged      Boolean          @default(false)
   vendormateMerged  Boolean          @default(false)
   onCallEnabled     Boolean          @default(false)
+  /// Rep opt-in. Ignored unless the company has enabled on-call DND override.
+  dndOverrideOptIn  Boolean          @default(false)
   products          String[]
   companies         String[]
   updatedAt         DateTime         @updatedAt

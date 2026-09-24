@@ -13,7 +13,14 @@ async function getOrCreateProfile(userId: string) {
     where: { userId },
     include: {
       territories: { include: { facility: true } },
-      user: { select: { name: true, email: true, phone: true, company: { select: { name: true } } } },
+      user: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+          company: { select: { name: true, onCallDndOverrideEnabled: true } },
+        },
+      },
     },
   });
 
@@ -25,7 +32,14 @@ async function getOrCreateProfile(userId: string) {
       where: { userId },
       include: {
         territories: { include: { facility: true } },
-        user: { select: { name: true, email: true, phone: true, company: { select: { name: true } } } },
+        user: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+          company: { select: { name: true, onCallDndOverrideEnabled: true } },
+        },
+      },
       },
     });
   }
@@ -73,14 +87,36 @@ export async function PATCH(request: Request) {
 
     const profileParsed = updateRepProfileSchema.safeParse(body);
     if (profileParsed.success) {
-      const { status, onCallEnabled, travelRadiusMiles, maxTravelDistance, products, lat, lng } =
-        profileParsed.data;
+      const {
+        status,
+        onCallEnabled,
+        dndOverrideOptIn,
+        travelRadiusMiles,
+        maxTravelDistance,
+        products,
+        lat,
+        lng,
+      } = profileParsed.data;
+
+      const company = session.user.companyId
+        ? await db.company.findUnique({
+            where: { id: session.user.companyId },
+            select: { onCallDndOverrideEnabled: true },
+          })
+        : null;
+      if (dndOverrideOptIn && !company?.onCallDndOverrideEnabled) {
+        return NextResponse.json(
+          { error: "Your company has not enabled an on-call Do Not Disturb override" },
+          { status: 400 }
+        );
+      }
 
       const updated = await db.repProfile.update({
         where: { userId: session.user.id },
         data: {
           ...(status && { status }),
           ...(onCallEnabled != null && { onCallEnabled }),
+          ...(dndOverrideOptIn != null && { dndOverrideOptIn }),
           ...(travelRadiusMiles != null && { travelRadiusMiles }),
           ...(maxTravelDistance != null && { maxTravelDistance }),
           ...(products && { products }),

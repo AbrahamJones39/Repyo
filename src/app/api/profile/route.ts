@@ -15,7 +15,7 @@ const profileSelect = {
   zipCodeStart: true,
   zipCodeEnd: true,
   adminPermissions: true,
-  company: { select: { id: true, name: true } },
+  company: { select: { id: true, name: true, onCallDndOverrideEnabled: true } },
   manager: { select: { id: true, name: true, role: true } },
   homeOrgUnit: { select: { id: true, name: true, typeLabel: true } },
   orgAssignments: {
@@ -30,6 +30,7 @@ const profileSelect = {
       products: true,
       credentialStatus: true,
       onCallEnabled: true,
+      dndOverrideOptIn: true,
       travelRadiusMiles: true,
       territories: {
         select: { state: true, county: true, zipCode: true },
@@ -139,6 +140,21 @@ export async function PATCH(request: Request) {
       const repData: Prisma.RepProfileUpdateInput = {};
       if (data.status !== undefined) repData.status = data.status;
       if (data.onCallEnabled !== undefined) repData.onCallEnabled = data.onCallEnabled;
+      if (data.dndOverrideOptIn !== undefined) {
+        const company = session.user.companyId
+          ? await db.company.findUnique({
+              where: { id: session.user.companyId },
+              select: { onCallDndOverrideEnabled: true },
+            })
+          : null;
+        if (data.dndOverrideOptIn && !company?.onCallDndOverrideEnabled) {
+          return NextResponse.json(
+            { error: "Your company has not enabled an on-call Do Not Disturb override" },
+            { status: 400 }
+          );
+        }
+        repData.dndOverrideOptIn = data.dndOverrideOptIn;
+      }
       if (data.products !== undefined) repData.products = data.products;
 
       if (Object.keys(repData).length > 0) {
@@ -148,6 +164,7 @@ export async function PATCH(request: Request) {
             userId,
             status: data.status ?? "OFF_DUTY",
             onCallEnabled: data.onCallEnabled ?? false,
+            dndOverrideOptIn: data.dndOverrideOptIn ?? false,
             products: data.products ?? [],
             companies: [],
           },

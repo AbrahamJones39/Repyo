@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RequestType, RequestUrgency } from "@prisma/client";
+import { FORWARD_REASONS } from "@/lib/forward-reasons";
 
 const zipSchema = z.string().regex(/^\d{5}$/, "Valid 5-digit zip code required");
 
@@ -143,7 +144,8 @@ export const updateRequestStatusSchema = z.object({
 export const forwardRequestSchema = z.object({
   action: z.literal("FORWARD"),
   forwardedToId: z.string().uuid(),
-  reason: z.string().max(500).optional(),
+  reason: z.enum(FORWARD_REASONS).optional(),
+  reasonNote: z.string().max(200).optional(),
   targetTeamId: z.string().uuid().optional(),
 });
 
@@ -175,6 +177,7 @@ export const updateRepLocationSchema = z.object({
 export const updateRepProfileSchema = z.object({
   status: z.enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"]).optional(),
   onCallEnabled: z.boolean().optional(),
+  dndOverrideOptIn: z.boolean().optional(),
   travelRadiusMiles: z.number().min(1).max(500).optional(),
   maxTravelDistance: z.number().min(1).max(500).optional(),
   products: z.array(z.string()).optional(),
@@ -292,6 +295,7 @@ export const updateCompanySchema = z.object({
   alertSecondReminderMin: z.number().int().min(1).max(180).optional(),
   alertEscalateMin: z.number().int().min(1).max(180).optional(),
   alertProviderNoticeMin: z.number().int().min(1).max(180).optional(),
+  onCallDndOverrideEnabled: z.boolean().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -583,6 +587,7 @@ export const updateOwnProfileSchema = z.object({
   zipCodeEnd: optionalZip,
   status: z.enum(["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"]).optional(),
   onCallEnabled: z.boolean().optional(),
+  dndOverrideOptIn: z.boolean().optional(),
   products: z.array(z.string()).optional(),
   jobTitle: optionalText,
   department: optionalText,
