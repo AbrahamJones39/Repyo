@@ -54,6 +54,23 @@ export async function GET() {
     (r) => !["COMPLETED", "CANCELLED"].includes(r.status)
   );
   const escalated = requests.filter((r) => Boolean(r.escalatedToId)).length;
+  const unacknowledged = requests.filter(
+    (r) => r.status === "REQUESTING" && !r.acknowledgedAt && r.notifiedAt
+  ).length;
+
+  function median(values: number[]) {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return Math.round(sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+  }
+
+  const ackMinutes = requests
+    .filter((r) => r.notifiedAt && r.acknowledgedAt)
+    .map((r) => (r.acknowledgedAt!.getTime() - r.notifiedAt!.getTime()) / 60000);
+  const acceptMinutes = requests
+    .filter((r) => r.notifiedAt && r.acceptedAt)
+    .map((r) => (r.acceptedAt!.getTime() - r.notifiedAt!.getTime()) / 60000);
 
   const responseTimes: number[] = [];
   for (const req of completed) {
@@ -123,8 +140,11 @@ export async function GET() {
       cancelled: cancelled.length,
       forwards: forwards.length,
       escalated,
+      unacknowledged,
     },
     avgResponseMinutes,
+    medianAckMinutes: median(ackMinutes),
+    medianAcceptMinutes: median(acceptMinutes),
     byProcedure: Object.entries(byProcedure)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count })),

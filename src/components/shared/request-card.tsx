@@ -41,6 +41,8 @@ export interface RequestData {
   identifiersHidden?: boolean;
   acknowledgedAt?: string | null;
   alertActive?: boolean;
+  routingExpandedAt?: string | null;
+  coverageStatus?: string | null;
   statusLogs?: { status: string; createdAt: string; note?: string | null }[];
   replies?: RequestReply[];
 }
@@ -83,11 +85,12 @@ export function RequestCard({
     setLocalRequest(request);
   }, [request]);
 
-  const isAssignedRep =
-    role === "rep" &&
-    currentUserId &&
-    localRequest.assignedRep?.id === currentUserId;
-  const needsOpen =
+  const isCoverageAssignee =
+    Boolean(currentUserId) &&
+    (localRequest.assignedRep?.id === currentUserId ||
+      (!localRequest.assignedRep && localRequest.assignedAdmin?.id === currentUserId));
+  const isAssignedRep = (role === "rep" || role === "company") && isCoverageAssignee;
+  const needsAck =
     isAssignedRep &&
     !localRequest.acknowledgedAt &&
     ["REQUESTING", "ACCEPTED"].includes(localRequest.status);
@@ -100,16 +103,21 @@ export function RequestCard({
     localRequest.status === "ACCEPTED" &&
     Boolean(localRequest.acknowledgedAt);
 
-  async function openRequest() {
+  async function acknowledge() {
     setOpening(true);
     setOpenError("");
     try {
+      await fetchJson(`/api/requests/${localRequest.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ACKNOWLEDGE" }),
+      });
       const detail = await fetchJson<RequestData>(`/api/requests/${localRequest.id}`);
-      setLocalRequest((prev) => ({ ...prev, ...detail }));
+      setLocalRequest((prev) => ({ ...prev, ...detail, acknowledgedAt: detail.acknowledgedAt ?? new Date().toISOString() }));
       setExpanded(true);
       onRefresh?.();
     } catch (err) {
-      setOpenError(err instanceof Error ? err.message : "Could not open request");
+      setOpenError(err instanceof Error ? err.message : "Could not acknowledge request");
     } finally {
       setOpening(false);
     }
@@ -141,8 +149,8 @@ export function RequestCard({
             )}
             {localRequest.identifiersHidden && (role === "rep" || role === "company") && (
               <p className="text-xs font-medium text-amber-700">
-                {needsOpen
-                  ? "Open this request to acknowledge and view protected details"
+                {needsAck
+                  ? "Acknowledge this request to stop alerts and view protected details"
                   : "Protected details available after acknowledgment"}
               </p>
             )}
@@ -289,13 +297,13 @@ export function RequestCard({
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
-        {needsOpen && (
-          <Button size="sm" onClick={openRequest} disabled={opening}>
-            {opening ? "Opening..." : "Open Request"}
+        {needsAck && (
+          <Button size="lg" className="w-full sm:w-auto" onClick={acknowledge} disabled={opening}>
+            {opening ? "Acknowledging..." : "Acknowledge"}
           </Button>
         )}
 
-        {!showPipeline && !needsOpen && (
+        {!showPipeline && !needsAck && (
           <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>
             {expanded ? "Hide" : "Track"} Status
           </Button>
@@ -337,27 +345,35 @@ export function RequestCard({
             </>
           )}
 
+        {role === "provider" && localRequest.routingExpandedAt && (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+            Coverage not yet acknowledged. Routing is open to other managers who cover this location.
+          </div>
+        )}
+
         {canRespond && onAction && (
-          <>
-            <Button size="sm" onClick={() => onAction("ACCEPTED", localRequest.id)}>
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
+            <Button size="lg" className="flex-1" onClick={() => onAction("ACCEPTED", localRequest.id)}>
               Accept
             </Button>
             <Button
-              size="sm"
+              size="lg"
               variant="outline"
-              onClick={() => onAction("FORWARD", localRequest.id)}
-            >
-              <ArrowRightLeft className="h-3.5 w-3.5" />
-              Forward
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
+              className="flex-1"
               onClick={() => onAction("DECLINE", localRequest.id)}
             >
               Decline
             </Button>
-          </>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex-1"
+              onClick={() => onAction("FORWARD", localRequest.id)}
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              Forward
+            </Button>
+          </div>
         )}
 
         {role === "rep" &&

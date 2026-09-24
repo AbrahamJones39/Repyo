@@ -515,6 +515,15 @@ async function applyCompanyVerification(
   });
 
   if (result.userAccountState === "VERIFIED") {
+    const rep = await db.user.findUnique({
+      where: { id: context.userId },
+      select: { role: true, managerId: true },
+    });
+    if (rep?.role === "REP" && !rep.managerId) {
+      throw new Error(
+        "Assign a manager before activating this rep so missed requests can be escalated"
+      );
+    }
     await db.user.update({
       where: { id: context.userId },
       data: { accountState: "VERIFIED", verifiedAt: now },
@@ -571,6 +580,11 @@ export async function approveCompanyUser(
   });
   if (!user) {
     throw new Error("User not found in company");
+  }
+  if (user.role === "REP" && !user.managerId) {
+    throw new Error(
+      "Assign a manager before activating this rep so missed requests can be escalated"
+    );
   }
 
   const now = new Date();

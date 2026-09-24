@@ -132,11 +132,10 @@ export async function acknowledgeRequestOnOpen(params: {
     companyId: request.companyId,
   });
 
-  const [rep, requestRecord, latestForward] = await Promise.all([
-    db.user.findUnique({ where: { id: userId }, select: { name: true } }),
+  const [requestRecord, latestForward] = await Promise.all([
     db.serviceRequest.findUnique({
       where: { id: requestId },
-      select: { assignedAdminId: true, facilityName: true },
+      select: { assignedAdminId: true },
     }),
     db.requestForward.findFirst({
       where: { requestId, forwardedToId: userId },
@@ -156,15 +155,12 @@ export async function acknowledgeRequestOnOpen(params: {
     notifyUserIds.add(latestForward.forwardedById);
   }
 
-  const repName = rep?.name ?? "Assigned rep";
-  const facilityLabel = requestRecord?.facilityName ?? "a case";
-
   for (const notifyUserId of notifyUserIds) {
     await db.notification.create({
       data: {
         userId: notifyUserId,
         title: GENERIC_NOTIFICATION.repAcknowledged.title,
-        body: `${repName} opened ${facilityLabel}.`,
+        body: GENERIC_NOTIFICATION.repAcknowledged.body,
         type: "REP_ACKNOWLEDGED",
         data: {
           requestId,
@@ -624,6 +620,9 @@ export async function forwardRequest(params: {
     },
   });
 
+  const { startCoverageAlert } = await import("@/lib/coverage-alerts");
+  await startCoverageAlert(params.requestId);
+
   realtimeBus.emit("request:updated", { requestId: params.requestId });
   if (!forwardToManager) {
     realtimeBus.emit(`user:${params.forwardedToId}`, {
@@ -653,11 +652,12 @@ export async function declineRequest(params: {
   if (request.status !== "REQUESTING") {
     return { ok: false, error: "Only pending requests can be declined" };
   }
-  if (request.assignedRepId !== params.repId) {
-    return { ok: false, error: "Only the assigned rep can decline this request" };
+  const assigneeId = request.assignedRepId ?? request.assignedAdminId;
+  if (assigneeId !== params.repId && request.escalatedToId !== params.repId) {
+    return { ok: false, error: "Only the assigned person can decline this request" };
   }
   if (!request.acknowledgedAt) {
-    return { ok: false, error: "Open the request before declining" };
+    return { ok: false, error: "Acknowledge the request before declining" };
   }
 
   await db.$transaction(async (tx) => {

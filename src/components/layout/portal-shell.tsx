@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/shared/notification-bell";
+import { CoverageAlert } from "@/components/shared/coverage-alert";
 import {
   Building2,
   CircleUser,
@@ -136,6 +137,7 @@ export function PortalShell({
         </div>
       </aside>
 
+      <CoverageAlert />
       <main className="flex-1 overflow-auto">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
           <div className="flex items-center gap-3">

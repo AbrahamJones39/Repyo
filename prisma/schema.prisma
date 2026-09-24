@@ -80,7 +80,34 @@ enum RoutingEventType {
   PHI_ACCESSED
   REQUEST_REROUTED
   ESCALATED_TO_MANAGER
+  ALERT_REPEATED
+  COVERAGE_EXPANDED
+  ALERT_STOPPED
   KILL_SWITCH_APPLIED
+}
+
+enum CoverageResponseStatus {
+  NOTIFIED
+  DELIVERED
+  ACKNOWLEDGED
+  ACCEPTED
+  DECLINED
+  ESCALATED
+}
+
+enum NotificationDeliveryStatus {
+  SENT
+  DELIVERED
+  FAILED
+  UNKNOWN
+}
+
+enum AlertStopReason {
+  ACKNOWLEDGED
+  CANCELLED
+  REASSIGNED
+  EXPIRED
+  ESCALATED
 }
 
 enum PhiAccessType {
@@ -251,6 +278,7 @@ model User {
   forwardsAsOriginal      RequestForward[]         @relation("ForwardOriginalRep")
   requestReplies          RequestReply[]
   authTickets             AuthTicket[]
+  coverageEvents          RequestCoverageEvent[]
 }
 
 model Company {
@@ -283,6 +311,14 @@ model Company {
   forwardEnabled              Boolean  @default(true)
   forwardTeamMembersOnly      Boolean  @default(false)
   forwardAllowManagers        Boolean  @default(true)
+  /// Minutes after notify before the first repeat alert.
+  alertFirstReminderMin       Int      @default(2)
+  /// Minutes after notify before the second repeat alert.
+  alertSecondReminderMin      Int      @default(5)
+  /// Minutes after notify before escalation to the designated manager.
+  alertEscalateMin            Int      @default(10)
+  /// Minutes after notify before the provider is told coverage is unacknowledged.
+  alertProviderNoticeMin      Int      @default(15)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -731,6 +767,17 @@ model ServiceRequest {
   acknowledgedAt       DateTime?
   acknowledgedById     String?
   alertActive          Boolean        @default(false)
+  coverageStatus       CoverageResponseStatus?
+  notifiedAt           DateTime?
+  deliveredAt          DateTime?
+  deliveryStatus       NotificationDeliveryStatus?
+  acceptedAt           DateTime?
+  declinedAt           DateTime?
+  routingExpandedAt    DateTime?
+  alertPhase           Int            @default(0)
+  nextAlertAt          DateTime?
+  alertStoppedAt       DateTime?
+  alertStopReason      AlertStopReason?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -749,8 +796,10 @@ model ServiceRequest {
   routingEvents  RequestRoutingEvent[]
   phiAccessLogs  PhiAccessLog[]
   forwards       RequestForward[]
+  coverageEvents RequestCoverageEvent[]
 
   @@index([providerId])
+  @@index([alertActive, nextAlertAt])
   @@index([initiatedByRepId])
   @@index([assignedAdminId])
   @@index([assignedRepId])
@@ -825,18 +874,47 @@ model FavoriteRep {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  body      String
-  type      String
-  data      Json?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id             String                      @id @default(uuid())
+  userId         String
+  requestId      String?
+  title          String
+  body           String
+  type           String
+  data           Json?
+  read           Boolean                     @default(false)
+  priority       String                      @default("NORMAL")
+  sentAt         DateTime                    @default(now())
+  deliveredAt    DateTime?
+  deliveryStatus NotificationDeliveryStatus @default(SENT)
+  alertKind      String?
+  stoppedAt      DateTime?
+  createdAt      DateTime                    @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+  @@index([requestId])
+}
+
+/// One row per coverage state change. Operational ids only — never PHI.
+model RequestCoverageEvent {
+  id             String                      @id @default(uuid())
+  requestId      String
+  assigneeId     String
+  status         CoverageResponseStatus
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  acknowledgedAt DateTime?
+  respondedAt    DateTime?
+  escalatedAt    DateTime?
+  deliveryStatus NotificationDeliveryStatus @default(UNKNOWN)
+  createdAt      DateTime                    @default(now())
+
+  request  ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignee User           @relation(fields: [assigneeId], references: [id])
+
+  @@index([requestId, createdAt])
+  @@index([assigneeId])
 }
 
 model RequestRoutingEvent {

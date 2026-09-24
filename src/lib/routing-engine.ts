@@ -18,11 +18,7 @@ import {
   isRepLocationSharingActive,
 } from "./rep-availability";
 import { distanceMiles, estimateEtaMinutes } from "./utils";
-import {
-  GENERIC_NOTIFICATION,
-  logPhiAccess,
-  logRoutingEvent,
-} from "./security/audit";
+import { logRoutingEvent } from "./security/audit";
 import { applyTeamDefaultsOnAssignment } from "./teams/calendar-visibility";
 
 export interface RoutingCriteria {
@@ -258,31 +254,29 @@ export async function assignRepToRequest(
     etaMinutes = estimateEtaMinutes(dist);
   }
 
-  await db.$transaction([
-    db.serviceRequest.update({
-      where: { id: requestId },
-      data: {
-        assignedRepId: repId,
-        originalRepId: existing?.originalRepId ?? repId,
-        etaMinutes,
-        repLat,
-        repLng,
-        assignedAt: new Date(),
-        acknowledgedAt: null,
-        acknowledgedById: null,
-        alertActive: true,
-      },
-    }),
-    db.notification.create({
-      data: {
-        userId: repId,
-        title: GENERIC_NOTIFICATION.assigned.title,
-        body: GENERIC_NOTIFICATION.assigned.body,
-        type: "REQUEST_ASSIGNED",
-        data: { requestId, alertActive: true },
-      },
-    }),
-  ]);
+  if (existing?.assignedRepId && existing.assignedRepId !== repId) {
+    const { stopCoverageAlerts } = await import("@/lib/coverage-alerts");
+    await stopCoverageAlerts({
+      requestId,
+      reason: "REASSIGNED",
+      actorId: actor?.id,
+    });
+  }
+
+  await db.serviceRequest.update({
+    where: { id: requestId },
+    data: {
+      assignedRepId: repId,
+      originalRepId: existing?.originalRepId ?? repId,
+      etaMinutes,
+      repLat,
+      repLng,
+      assignedAt: new Date(),
+      status: "REQUESTING",
+      acknowledgedAt: null,
+      acknowledgedById: null,
+    },
+  });
 
   await applyTeamDefaultsOnAssignment(requestId, repId);
 
@@ -301,14 +295,8 @@ export async function assignRepToRequest(
     },
   });
 
-  await logPhiAccess({
-    requestId,
-    userId: repId,
-    userRole: "REP",
-    accessType: "NOTIFICATION_SENT",
-    companyId: existing?.companyId ?? criteria.companyId,
-    metadata: { notificationType: "REQUEST_ASSIGNED" },
-  });
+  const { startCoverageAlert } = await import("@/lib/coverage-alerts");
+  await startCoverageAlert(requestId);
 
   if (isReassign && existing?.assignedRepId) {
     await logRoutingEvent({

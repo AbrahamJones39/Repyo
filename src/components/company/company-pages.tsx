@@ -33,7 +33,13 @@ const QUALIFIED_STATUSES = ["ACTIVE", "PENDING", "EXPIRED", "REVOKED"] as const;
 
 const REQUEST_TABS = ["all", "active", "completed", "cancelled"] as const;
 
-export function CompanyRequestsPage({ userName }: { userName: string }) {
+export function CompanyRequestsPage({
+  userName,
+  userId,
+}: {
+  userName: string;
+  userId: string;
+}) {
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [reps, setReps] = useState<{ id: string; name: string }[]>([]);
   const [delegation, setDelegation] = useState<{
@@ -215,6 +221,7 @@ export function CompanyRequestsPage({ userName }: { userName: string }) {
               request={req}
               role="company"
               showPipeline
+              currentUserId={userId}
               availableReps={reps}
               onAction={handleAction}
               onAssignRep={handleAssignRep}
@@ -597,8 +604,17 @@ function AddRepModal({
 }
 
 interface Analytics {
-  totals: { all: number; active: number; completed: number; cancelled: number; escalated?: number };
+  totals: {
+    all: number;
+    active: number;
+    completed: number;
+    cancelled: number;
+    escalated?: number;
+    unacknowledged?: number;
+  };
   avgResponseMinutes: number | null;
+  medianAckMinutes?: number | null;
+  medianAcceptMinutes?: number | null;
   byProcedure: { name: string; count: number }[];
   byUrgency: { name: string; count: number }[];
   coverage: { totalReps: number; availableReps: number; credentialedReps: number };
@@ -646,6 +662,9 @@ export function CompanyAnalyticsPage({ userName }: { userName: string }) {
           { label: "Active", value: data.totals.active },
           { label: "Completed", value: data.totals.completed },
           { label: "Escalated", value: data.totals.escalated ?? 0 },
+          { label: "Unacknowledged", value: data.totals.unacknowledged ?? 0 },
+          { label: "Median ack", value: data.medianAckMinutes != null ? `${data.medianAckMinutes}m` : "—" },
+          { label: "Median accept", value: data.medianAcceptMinutes != null ? `${data.medianAcceptMinutes}m` : "—" },
           { label: "Avg Response", value: data.avgResponseMinutes != null ? `${data.avgResponseMinutes}m` : "—" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5">

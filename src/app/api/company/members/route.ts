@@ -26,6 +26,7 @@ export async function GET() {
       role: true,
       accountState: true,
       createdAt: true,
+      managerId: true,
       repProfile: { select: { credentialStatus: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -55,6 +56,17 @@ export async function PATCH(request: Request) {
   const userId = String(body.userId ?? "");
 
   if (body.action === "approve") {
+    if (body.managerId) {
+      const { requireRepManager } = await import("@/lib/org-scope");
+      const managerId = await requireRepManager({
+        managerId: String(body.managerId),
+        companyId,
+      });
+      await db.user.update({
+        where: { id: userId },
+        data: { managerId },
+      });
+    }
     await approveCompanyUser(
       userId,
       session.user.id,

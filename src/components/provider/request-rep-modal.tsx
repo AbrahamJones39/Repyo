@@ -522,7 +522,7 @@ export function RequestRepModal({
             </h2>
             {!isRepMode && (
               <p className="mt-0.5 text-sm text-slate-600">
-                We will match the closest rep for you
+                We will send this to the account manager covering this location
               </p>
             )}
           </div>
@@ -828,11 +828,11 @@ export function RequestRepModal({
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-rose-500" />
                       <span className="font-medium text-slate-900">
-                        Auto-assign closest rep
+                        Auto-route to covering manager
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      We will match the closest rep for you
+                      Sends this to the account manager whose team covers this location
                     </p>
                   </div>
                 </button>
@@ -863,8 +863,8 @@ export function RequestRepModal({
 
                 {availableFavoriteReps.length === 0 && otherAvailableReps.length === 0 && (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-center text-sm text-slate-600">
-                    No reps are currently available. Submit anyway and we will match the
-                    closest rep for you when one becomes available.
+                    No reps are currently available. Submit anyway and the account manager
+                    covering this location will receive it.
                   </div>
                 )}
               </div>

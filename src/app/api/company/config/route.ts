@@ -4,6 +4,7 @@ import { hasAdminPermission, ADMIN_PERMISSIONS } from "@/lib/security/authorizat
 import { toSessionUser } from "@/lib/security/sanitize-request";
 import { updateCompanySchema } from "@/lib/validations";
 import { encryptSsoSecret } from "@/lib/verification/sso";
+import { validateAlertTiming } from "@/lib/coverage-alerts";
 import { NextResponse } from "next/server";
 
 const companyConfigSelect = {
@@ -12,6 +13,10 @@ const companyConfigSelect = {
   forwardEnabled: true,
   forwardTeamMembersOnly: true,
   forwardAllowManagers: true,
+  alertFirstReminderMin: true,
+  alertSecondReminderMin: true,
+  alertEscalateMin: true,
+  alertProviderNoticeMin: true,
   userVerificationMethod: true,
   approvedEmailDomains: true,
   ssoEnabled: true,
@@ -85,6 +90,34 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 
+  const current = await db.company.findUnique({
+    where: { id: companyId },
+    select: {
+      alertFirstReminderMin: true,
+      alertSecondReminderMin: true,
+      alertEscalateMin: true,
+      alertProviderNoticeMin: true,
+    },
+  });
+  if (
+    parsed.data.alertFirstReminderMin !== undefined ||
+    parsed.data.alertSecondReminderMin !== undefined ||
+    parsed.data.alertEscalateMin !== undefined ||
+    parsed.data.alertProviderNoticeMin !== undefined
+  ) {
+    const timingError = validateAlertTiming({
+      firstReminderMin: parsed.data.alertFirstReminderMin ?? current?.alertFirstReminderMin ?? 2,
+      secondReminderMin:
+        parsed.data.alertSecondReminderMin ?? current?.alertSecondReminderMin ?? 5,
+      escalateMin: parsed.data.alertEscalateMin ?? current?.alertEscalateMin ?? 10,
+      providerNoticeMin:
+        parsed.data.alertProviderNoticeMin ?? current?.alertProviderNoticeMin ?? 15,
+    });
+    if (timingError) {
+      return NextResponse.json({ error: timingError }, { status: 400 });
+    }
+  }
+
   const data = {
     ...(parsed.data.forwardEnabled !== undefined
       ? { forwardEnabled: parsed.data.forwardEnabled }
@@ -94,6 +127,18 @@ export async function PATCH(request: Request) {
       : {}),
     ...(parsed.data.forwardAllowManagers !== undefined
       ? { forwardAllowManagers: parsed.data.forwardAllowManagers }
+      : {}),
+    ...(parsed.data.alertFirstReminderMin !== undefined
+      ? { alertFirstReminderMin: parsed.data.alertFirstReminderMin }
+      : {}),
+    ...(parsed.data.alertSecondReminderMin !== undefined
+      ? { alertSecondReminderMin: parsed.data.alertSecondReminderMin }
+      : {}),
+    ...(parsed.data.alertEscalateMin !== undefined
+      ? { alertEscalateMin: parsed.data.alertEscalateMin }
+      : {}),
+    ...(parsed.data.alertProviderNoticeMin !== undefined
+      ? { alertProviderNoticeMin: parsed.data.alertProviderNoticeMin }
       : {}),
     ...(parsed.data.userVerificationMethod !== undefined
       ? { userVerificationMethod: parsed.data.userVerificationMethod }

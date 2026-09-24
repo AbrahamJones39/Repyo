@@ -24,6 +24,7 @@ type PendingMember = {
   email: string;
   role: string;
   accountState: string;
+  managerId?: string | null;
 };
 
 type RosterEntry = { id: string; email: string; name: string | null; jobTitle: string | null };
@@ -38,6 +39,8 @@ export function CompanyVerificationPanel() {
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [issuedToken, setIssuedToken] = useState("");
   const [pending, setPending] = useState<PendingMember[]>([]);
+  const [managers, setManagers] = useState<{ id: string; name: string }[]>([]);
+  const [managerChoice, setManagerChoice] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +52,10 @@ export function CompanyVerificationPanel() {
     try {
       const [cfg, members, rosterData] = await Promise.all([
         fetchJson<CompanyVerificationConfig>("/api/company/config"),
-        fetchJson<{ pending: PendingMember[] }>("/api/company/members"),
+        fetchJson<{
+          pending: PendingMember[];
+          members: { id: string; name: string; role: string }[];
+        }>("/api/company/members"),
         fetchJson<{ entries: RosterEntry[] }>("/api/company/roster"),
       ]);
       setConfig(cfg);
@@ -57,6 +63,11 @@ export function CompanyVerificationPanel() {
       setSsoIssuer(cfg.ssoIssuer ?? "");
       setSsoClientId(cfg.ssoClientId ?? "");
       setPending(members.pending ?? []);
+      setManagers(
+        (members.members ?? [])
+          .filter((member) => member.role === "COMPANY_ADMIN")
+          .map((member) => ({ id: member.id, name: member.name }))
+      );
       setRoster(rosterData.entries ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
@@ -137,7 +148,11 @@ export function CompanyVerificationPanel() {
       await fetchJson("/api/company/members", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "approve" }),
+        body: JSON.stringify({
+          userId,
+          action: "approve",
+          managerId: managerChoice[userId] || undefined,
+        }),
       });
       await load();
     } catch (err) {
@@ -311,9 +326,34 @@ export function CompanyVerificationPanel() {
                     {member.email} · {member.role}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => approveUser(member.id)}>
-                  Approve
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {member.role === "REP" && !member.managerId && (
+                    <select
+                      value={managerChoice[member.id] ?? ""}
+                      onChange={(e) =>
+                        setManagerChoice((current) => ({
+                          ...current,
+                          [member.id]: e.target.value,
+                        }))
+                      }
+                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                    >
+                      <option value="">Assign manager...</option>
+                      {managers.map((manager) => (
+                        <option key={manager.id} value={manager.id}>
+                          {manager.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={member.role === "REP" && !member.managerId && !managerChoice[member.id]}
+                    onClick={() => approveUser(member.id)}
+                  >
+                    Approve
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

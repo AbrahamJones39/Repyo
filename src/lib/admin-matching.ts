@@ -34,9 +34,8 @@ export async function findMatchingAdmin(
     ? covered.filter((row) => row.site.id === target.siteId)
     : [];
 
-  const match =
-    admins.find((admin) => covering.some((row) => row.userId === admin.id)) ??
-    admins[0];
+  const match = admins.find((admin) => covering.some((row) => row.userId === admin.id));
+  if (!match) return null;
 
   return {
     id: match.id,

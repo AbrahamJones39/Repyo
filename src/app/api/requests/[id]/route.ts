@@ -19,7 +19,6 @@ import {
 import { canAccessRequestRecord } from "@/lib/security/authorization";
 import { assignRepSchema, updateRequestStatusSchema, forwardRequestSchema, declineRequestSchema } from "@/lib/validations";
 import {
-  acknowledgeRequestOnOpen,
   declineRequest,
   forwardRequest,
   markForwardAccepted,
@@ -77,21 +76,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const acknowledgedAt = await acknowledgeRequestOnOpen({
-    requestId: id,
-    userId: user.id,
-    userRole: user.role,
-    request: {
-      assignedRepId: serviceRequest.assignedRepId,
-      status: serviceRequest.status,
-      acknowledgedAt: serviceRequest.acknowledgedAt,
-      companyId: serviceRequest.companyId,
-    },
-  });
-
-  const requestForSanitize = acknowledgedAt
-    ? { ...serviceRequest, acknowledgedAt }
-    : serviceRequest;
+  const requestForSanitize = serviceRequest;
 
   const isDelegatedAdmin =
     user.role === "REP" &&
@@ -161,6 +146,19 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const body = await request.json();
 
+  if (body.action === "ACKNOWLEDGE") {
+    const { acknowledgeCoverage } = await import("@/lib/coverage-alerts");
+    const result = await acknowledgeCoverage({
+      requestId: id,
+      userId: sessionUser.id,
+      userRole: sessionUser.role,
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ acknowledgedAt: result.acknowledgedAt });
+  }
+
   if (body.action === "FORWARD") {
     return handleForward(sessionUser, id, body);
   }
@@ -204,6 +202,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!canActAsAdmin && !isSuperAdmin && !isRep) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if ((isRep || canActAsAdmin) && !existing.acknowledgedAt) {
+      return NextResponse.json(
+        { error: "Acknowledge the request before accepting" },
+        { status: 400 }
+      );
+    }
   } else if (status === "CANCELLED" && isProvider) {
     // provider can cancel
   } else if (isRep) {
@@ -223,6 +227,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         status,
         ...(lat != null && { repLat: lat }),
         ...(lng != null && { repLng: lng }),
+        ...(status === "CANCELLED" ? { alertActive: false, alertStopReason: "CANCELLED" as const } : {}),
       },
     });
 
@@ -253,7 +258,22 @@ export async function PATCH(request: Request, context: RouteContext) {
     return req;
   });
 
+  if (status === "CANCELLED") {
+    const { stopCoverageAlerts } = await import("@/lib/coverage-alerts");
+    await stopCoverageAlerts({
+      requestId: id,
+      reason: "CANCELLED",
+      actorId: sessionUser.id,
+    });
+  }
+
   if (status === "ACCEPTED") {
+    const { recordCoverageDecision } = await import("@/lib/coverage-alerts");
+    await recordCoverageDecision({
+      requestId: id,
+      userId: sessionUser.id,
+      decision: "ACCEPTED",
+    });
     await logRoutingEvent({
       requestId: id,
       eventType: "REP_ACCEPTED",
@@ -316,7 +336,7 @@ async function handleDecline(
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 
-  if (user.role !== "REP") {
+  if (user.role !== "REP" && user.role !== "COMPANY_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -329,6 +349,13 @@ async function handleDecline(
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
+
+  const { recordCoverageDecision } = await import("@/lib/coverage-alerts");
+  await recordCoverageDecision({
+    requestId,
+    userId: user.id,
+    decision: "DECLINED",
+  });
 
   return NextResponse.json({ declined: true });
 }

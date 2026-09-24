@@ -24,7 +24,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { ids } = await request.json();
+  const body = await request.json();
+  const ids = body.ids as string[];
+  const delivered = Boolean(body.delivered);
+  const requestId = typeof body.requestId === "string" ? body.requestId : null;
 
   const notifications = await db.notification.findMany({
     where: { id: { in: ids }, userId: session.user.id },
@@ -33,8 +36,15 @@ export async function PATCH(request: Request) {
 
   await db.notification.updateMany({
     where: { id: { in: ids }, userId: session.user.id },
-    data: { read: true },
+    data: delivered
+      ? { deliveredAt: new Date(), deliveryStatus: "DELIVERED" }
+      : { read: true },
   });
+
+  if (delivered && requestId) {
+    const { markCoverageDelivered } = await import("@/lib/coverage-alerts");
+    await markCoverageDelivered({ requestId, userId: session.user.id });
+  }
 
   for (const n of notifications) {
     const requestId =

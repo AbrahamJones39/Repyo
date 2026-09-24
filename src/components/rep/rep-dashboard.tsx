@@ -273,6 +273,7 @@ export function RepDashboard({
                 key={req.id}
                 request={req}
                 role="company"
+                currentUserId={userId}
                 availableReps={companyReps}
                 onAction={handleAction}
                 onAssignRep={handleAssignRep}

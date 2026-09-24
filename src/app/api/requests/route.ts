@@ -8,12 +8,7 @@ import { createSalesforceCase, findCompanyByManufacturer, lookupPatientDevice } 
 import { createRequestSchemaForPhi } from "@/lib/validations";
 import { getProviderAccess } from "@/lib/provider-access";
 import { getDelegatedAdminIdsForRep } from "@/lib/admin-matching";
-import {
-  GENERIC_NOTIFICATION,
-  logPhiAccess,
-  logRoutingEvent,
-  safeStatusNote,
-} from "@/lib/security/audit";
+import { logRoutingEvent, safeStatusNote } from "@/lib/security/audit";
 import {
   sanitizeRequestForUser,
   toSessionUser,
@@ -253,11 +248,7 @@ export async function POST(request: Request) {
       ? data.assignRepId ?? data.preferredRepId ?? null
       : data.preferredRepId ?? null;
 
-    // Auto-assign closest available rep when provider did not pick one
-    if (!assignRepId && !isRepInitiated) {
-      const eligible = await findEligibleReps(routingCriteria);
-      assignRepId = eligible[0]?.userId ?? null;
-    }
+    // Auto routes to a manager who elected this location, not the closest rep.
 
     if (assignRepId) {
       const eligible = await findEligibleReps({
@@ -310,7 +301,7 @@ export async function POST(request: Request) {
         urgency,
         scheduledAt,
         notes: data.notes,
-        status: assignRepId ? "ACCEPTED" : "REQUESTING",
+        status: "REQUESTING",
       },
     });
 
@@ -348,13 +339,10 @@ export async function POST(request: Request) {
       });
     }
 
-    const autoAssigned = !data.preferredRepId && !data.assignRepId && assignRepId;
     const repNote = assignRepId
       ? isRepInitiated
         ? "Rep-initiated request assigned on creation"
-        : autoAssigned
-          ? "Auto-assigned to closest available rep"
-          : "Provider requested a specific rep"
+        : "Provider requested a specific rep"
       : null;
 
     await db.requestStatusLog.create({
@@ -421,31 +409,16 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-    } else {
-      const notifyUserId =
-        matchedAdmin?.delegationActive && matchedAdmin.delegatedRepId
-          ? matchedAdmin.delegatedRepId
-          : matchedAdmin?.id;
-
-      if (notifyUserId) {
-        await db.notification.create({
-          data: {
-            userId: notifyUserId,
-            title: GENERIC_NOTIFICATION.newRequest.title,
-            body: GENERIC_NOTIFICATION.newRequest.body,
-            type: "REQUEST_ASSIGNED",
-            data: { requestId: serviceRequest.id },
-          },
-        });
-        await logPhiAccess({
-          requestId: serviceRequest.id,
-          userId: notifyUserId,
-          userRole: "COMPANY_ADMIN",
-          accessType: "NOTIFICATION_SENT",
-          companyId,
-          metadata: { notificationType: "NEW_REQUEST" },
-        });
-      }
+    } else if (matchedAdmin) {
+      const { startCoverageAlert } = await import("@/lib/coverage-alerts");
+      await db.serviceRequest.update({
+        where: { id: serviceRequest.id },
+        data: {
+          assignedAdminId: matchedAdmin.id,
+          assignedAt: new Date(),
+        },
+      });
+      await startCoverageAlert(serviceRequest.id);
     }
 
     const sessionUser = toSessionUser({

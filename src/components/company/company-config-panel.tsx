@@ -10,6 +10,10 @@ type CompanyConfig = {
   forwardEnabled: boolean;
   forwardTeamMembersOnly: boolean;
   forwardAllowManagers: boolean;
+  alertFirstReminderMin: number;
+  alertSecondReminderMin: number;
+  alertEscalateMin: number;
+  alertProviderNoticeMin: number;
 };
 
 export function CompanyConfigPanel() {
@@ -151,6 +155,51 @@ export function CompanyConfigPanel() {
         }
       >
         {saving ? "Saving..." : "Save Forward Settings"}
+      </Button>
+
+      <h2 className="mt-8 font-semibold text-slate-900">Coverage alert timing</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Unacknowledged requests repeat a high-priority alert, then escalate to the
+        rep&apos;s manager. Times are minutes after the alert is sent.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            ["alertFirstReminderMin", "First reminder"],
+            ["alertSecondReminderMin", "Second reminder"],
+            ["alertEscalateMin", "Escalate to manager"],
+            ["alertProviderNoticeMin", "Tell the provider"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="text-sm">
+            <span className="font-medium text-slate-900">{label}</span>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              value={config[key]}
+              onChange={(e) =>
+                setConfig({ ...config, [key]: Number(e.target.value) })
+              }
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+            />
+          </label>
+        ))}
+      </div>
+      <Button
+        className="mt-5"
+        variant="outline"
+        disabled={saving}
+        onClick={() =>
+          save({
+            alertFirstReminderMin: config.alertFirstReminderMin,
+            alertSecondReminderMin: config.alertSecondReminderMin,
+            alertEscalateMin: config.alertEscalateMin,
+            alertProviderNoticeMin: config.alertProviderNoticeMin,
+          })
+        }
+      >
+        {saving ? "Saving..." : "Save Alert Timing"}
       </Button>
     </div>
   );

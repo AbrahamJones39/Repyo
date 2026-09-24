@@ -288,6 +288,10 @@ export const updateCompanySchema = z.object({
   forwardEnabled: z.boolean().optional(),
   forwardTeamMembersOnly: z.boolean().optional(),
   forwardAllowManagers: z.boolean().optional(),
+  alertFirstReminderMin: z.number().int().min(1).max(180).optional(),
+  alertSecondReminderMin: z.number().int().min(1).max(180).optional(),
+  alertEscalateMin: z.number().int().min(1).max(180).optional(),
+  alertProviderNoticeMin: z.number().int().min(1).max(180).optional(),
 });
 
 export const updateUserSchema = z.object({
