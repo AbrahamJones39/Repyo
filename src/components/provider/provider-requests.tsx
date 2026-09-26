@@ -6,11 +6,11 @@ import { RequestCard, type RequestData } from "@/components/shared/request-card"
 import { connectEventSource, fetchJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-const TABS = ["all", "active", "completed", "cancelled"] as const;
+const TABS = ["created", "shared", "all", "active", "completed", "cancelled"] as const;
 
 export function ProviderRequestsPage({ userName }: { userName: string }) {
   const [requests, setRequests] = useState<RequestData[]>([]);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("all");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("created");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,14 +49,16 @@ export function ProviderRequestsPage({ userName }: { userName: string }) {
 
   const filtered = requests.filter((r) => {
     if (tab === "active") return !["COMPLETED", "CANCELLED"].includes(r.status);
+    if (tab === "created") return Boolean(r.isRequestOwner);
     if (tab === "completed") return r.status === "COMPLETED";
     if (tab === "cancelled") return r.status === "CANCELLED";
+    if (tab === "shared") return Boolean(r.isSharedWithMe);
     return true;
   });
 
   return (
     <PortalShell portal="provider" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">All Requests</h1>
+      <h1 className="text-2xl font-bold text-slate-900">My Requests</h1>
       <p className="mt-1 text-sm text-slate-600">{requests.length} total requests</p>
 
       {error && (
@@ -75,7 +77,7 @@ export function ProviderRequestsPage({ userName }: { userName: string }) {
                 : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
             )}
           >
-            {t}
+            {t === "created" ? "Created by me" : t === "shared" ? "Shared with me" : t === "all" ? "All" : t}
           </button>
         ))}
       </div>
@@ -93,6 +95,7 @@ export function ProviderRequestsPage({ userName }: { userName: string }) {
               role="provider"
               onAction={handleAction}
               showPipeline
+              onRefresh={load}
             />
           ))
         )}

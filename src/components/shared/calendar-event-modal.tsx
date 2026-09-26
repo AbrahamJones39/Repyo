@@ -139,6 +139,15 @@ function RequestEventModal({
           </div>
         )}
 
+        {request?.isSharedWithMe && (
+          <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <p>Created by: {request.provider?.name ?? "A coworker"}</p>
+            <p>Shared with you by: {request.sharedWithMeBy ?? "a coworker"}</p>
+            {request.sharedWithMeReason && <p>Reason: {request.sharedWithMeReason}</p>}
+            {request.phiRestricted !== false && <p className="font-medium">Patient details restricted</p>}
+          </div>
+        )}
+
         {request?.identifiersHidden && (role === "rep" || role === "company") && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Protected patient details are hidden until you open this request from your dashboard.
@@ -242,7 +251,7 @@ function RequestEventModal({
           <DetailRow icon={<Clock className="h-4 w-4" />} label="Case notes" value={request.notes} />
         )}
 
-        {request && (
+        {request && !request.isSharedWithMe && (
           <RequestReplies
             requestId={request.id}
             replies={request.replies ?? []}

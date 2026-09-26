@@ -13,7 +13,8 @@ import {
   sanitizeRequestForUser,
   toSessionUser,
 } from "@/lib/security/sanitize-request";
-import { canAccessRequestRecord } from "@/lib/security/authorization";
+import { canAccessRequestRecord, canViewRequestPhi } from "@/lib/security/authorization";
+import { activeVerifiedProviderShares, isSharedWithActiveProvider, publicRequestActivity, sharedWithProviderWhere } from "@/lib/request-shares";
 import { RequestUrgency } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -36,7 +37,21 @@ export async function GET() {
     let where: Record<string, unknown> = {};
 
     if (session.user.role === "PROVIDER") {
-      where = { providerId: session.user.id };
+      const profile = await db.providerProfile.findUnique({
+        where: { userId: session.user.id },
+        select: { organizationId: true, accountStatus: true },
+      });
+      const canReceiveShares = session.user.accountState === "VERIFIED"
+        && profile?.accountStatus === "ACTIVE"
+        && Boolean(profile.organizationId);
+      where = canReceiveShares && profile?.organizationId
+        ? {
+            OR: [
+              { providerId: session.user.id },
+              sharedWithProviderWhere(session.user.id, profile.organizationId),
+            ],
+          }
+        : { providerId: session.user.id };
     } else if (session.user.role === "REP") {
       const delegatedAdminIds = await getDelegatedAdminIdsForRep(session.user.id);
       where = {
@@ -79,15 +94,35 @@ export async function GET() {
     const requests = await db.serviceRequest.findMany({
       where,
       include: {
-        provider: { select: { id: true, name: true, phone: true } },
+        provider: { select: { id: true, name: true, phone: true, providerInfo: { select: { organizationId: true } } } },
         initiatedByRep: { select: { id: true, name: true, phone: true } },
         assignedRep: { select: { id: true, name: true, phone: true } },
         assignedAdmin: { select: { id: true, name: true } },
         company: { select: { id: true, name: true } },
-        statusLogs: { orderBy: { createdAt: "desc" }, take: 5 },
+        statusLogs: { orderBy: { createdAt: "desc" }, take: 20 },
+        routingEvents: {
+          orderBy: { createdAt: "desc" },
+          take: 40,
+          select: {
+            id: true,
+            eventType: true,
+            createdAt: true,
+            targetUserId: true,
+            metadata: true,
+            actor: { select: { name: true } },
+          },
+        },
         replies: {
           orderBy: { createdAt: "asc" },
           include: { author: { select: { id: true, name: true, role: true } } },
+        },
+        shares: {
+          where: { revokedAt: null },
+          include: {
+            user: { select: { id: true, name: true, role: true, accountState: true, providerInfo: { select: { organizationId: true, accountStatus: true, jobTitle: true, facilityName: true, department: true } }, providerSiteMemberships: { select: { organizationId: true, department: true, site: { select: { name: true } } } } } },
+            sharedBy: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: "asc" },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -110,17 +145,37 @@ export async function GET() {
         ? await (await import("@/lib/org-scope")).getScopedRepIds(user)
         : [];
 
-    const sanitized = requests
-      .filter((r) =>
-        canAccessRequestRecord(user, r, { delegatedAdminIds, scopedRepIds })
-      )
+    const requestsWithValidShares = requests.map((request) => ({
+      ...request,
+      shares: activeVerifiedProviderShares(request),
+    }));
+
+    const sanitized = requestsWithValidShares
+      .filter((r) => canAccessRequestRecord(user, r, {
+        delegatedAdminIds,
+        scopedRepIds,
+        isSharedWithUser: user.role === "PROVIDER" && r.providerId !== user.id &&
+          isSharedWithActiveProvider(r.shares, user.id),
+      }))
       .map((r) => {
+        const myShare = r.shares.find((share) => share.userId === user.id && !share.revokedAt && share.requestAccess);
+        const isSharedProvider = user.role === "PROVIDER" && r.providerId !== user.id && Boolean(myShare);
         const isDelegatedAdmin =
           user.role === "REP" &&
           Boolean(
             r.assignedAdminId && delegatedAdminIds.includes(r.assignedAdminId)
           );
-        return sanitizeRequestForUser(r, user, { isDelegatedAdmin });
+        const shareOptions = { isDelegatedAdmin, isSharedProvider, sharedPhiAccess: Boolean(myShare?.phiAccess) };
+        return {
+          ...sanitizeRequestForUser(r, user, shareOptions),
+          activity: publicRequestActivity(r, {
+            includePhiEvents: canViewRequestPhi(user, r, shareOptions),
+          }),
+          isRequestOwner: r.providerId === user.id,
+          isSharedWithMe: isSharedProvider,
+          sharedWithMeBy: isSharedProvider ? myShare?.sharedBy.name ?? null : null,
+          sharedWithMeReason: isSharedProvider ? myShare?.reason ?? null : null,
+        };
       });
 
     return NextResponse.json(sanitized);

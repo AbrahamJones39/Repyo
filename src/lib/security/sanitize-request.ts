@@ -40,7 +40,7 @@ type RawRequest = {
 export function sanitizeRequestForUser(
   request: RawRequest,
   user: SessionUser,
-  options?: { isDelegatedAdmin?: boolean }
+  options?: { isDelegatedAdmin?: boolean; isSharedProvider?: boolean; sharedPhiAccess?: boolean }
 ) {
   const {
     patientNameEnc,
@@ -64,8 +64,10 @@ export function sanitizeRequestForUser(
     !request.acknowledgedAt &&
     (request.status === "REQUESTING" || repMustAcknowledge);
 
-  const sanitized = {
+  const sanitized: Record<string, unknown> = {
     ...base,
+    provider: safeProviderSummary(request.provider),
+    shares: safeShareSummaries(request.shares),
     patientNameEnc: undefined,
     patientDOBEnc: undefined,
     patientRoomEnc: undefined,
@@ -76,8 +78,11 @@ export function sanitizeRequestForUser(
     acknowledgedAt: request.acknowledgedAt?.toISOString?.() ?? request.acknowledgedAt ?? null,
     alertActive: request.alertActive ?? false,
   };
+  for (const key of ["routingEvents", "phiAccessLogs", "forwards", "coverageEvents"]) {
+    delete sanitized[key];
+  }
 
-  if (phiAllowed) {
+  if (phiAllowed && !options?.isSharedProvider) {
     Object.assign(sanitized, {
       patientName: patientNameEnc ? decryptPHI(patientNameEnc) : null,
       patientDOB: patientDOBEnc
@@ -87,7 +92,7 @@ export function sanitizeRequestForUser(
     });
   }
 
-  if (deviceAllowed) {
+  if (deviceAllowed && !options?.isSharedProvider) {
     Object.assign(sanitized, {
       deviceName: deviceNameEnc ? decryptPHI(deviceNameEnc) : null,
       deviceSerial: deviceSerialEnc ? decryptPHI(deviceSerialEnc) : null,
@@ -120,6 +125,65 @@ export function sanitizeRequestForUser(
       };
     });
 
+  if (options?.isSharedProvider) {
+    for (const key of [
+      "notes",
+      "requesterName",
+      "requesterPhone",
+      "requesterEmail",
+      "requesterFax",
+      "facilityPhone",
+      "facilityContactName",
+      "facilityContactPhone",
+      "facilityLat",
+      "facilityLng",
+      "repLat",
+      "repLng",
+      "etaMinutes",
+      "salesforceRecordId",
+      "salesforceCaseId",
+      "patientName",
+      "patientDOB",
+      "patientRoom",
+      "deviceName",
+      "deviceSerial",
+      "killSwitchReason",
+    ]) {
+      delete sanitized[key];
+    }
+    sanitized.provider = sanitized.provider && typeof sanitized.provider === "object"
+      ? { id: (sanitized.provider as { id?: string }).id, name: (sanitized.provider as { name?: string }).name, phone: null }
+      : sanitized.provider;
+    sanitized.assignedRep = request.assignedRep && typeof request.assignedRep === "object"
+      ? { id: (request.assignedRep as { id?: string }).id, name: (request.assignedRep as { name?: string }).name, phone: null }
+      : null;
+    sanitized.assignedAdmin = request.assignedAdmin && typeof request.assignedAdmin === "object"
+      ? { id: (request.assignedAdmin as { id?: string }).id, name: (request.assignedAdmin as { name?: string }).name }
+      : request.assignedAdmin ?? null;
+    sanitized.initiatedByRep = request.initiatedByRep && typeof request.initiatedByRep === "object"
+      ? { id: (request.initiatedByRep as { id?: string }).id, name: (request.initiatedByRep as { name?: string }).name, phone: null }
+      : null;
+    sanitized.statusLogs = Array.isArray(request.statusLogs)
+      ? request.statusLogs.map((item) => ({
+          status: (item as { status?: string }).status,
+          createdAt: (item as { createdAt?: Date | string }).createdAt,
+        }))
+      : [];
+    sanitized.replies = [];
+    sanitized.phiRestricted = true;
+    if (options.sharedPhiAccess) {
+      Object.assign(sanitized, {
+        patientName: patientNameEnc ? decryptPHI(patientNameEnc) : null,
+        patientDOB: patientDOBEnc ? decryptDate(patientDOBEnc).toISOString() : null,
+        patientRoom: patientRoomEnc ? decryptPHI(patientRoomEnc) : null,
+        deviceName: deviceNameEnc ? decryptPHI(deviceNameEnc) : null,
+        deviceSerial: deviceSerialEnc ? decryptPHI(deviceSerialEnc) : null,
+        phiRestricted: false,
+      });
+    }
+    return sanitized;
+  }
+
   if (isPreAcceptance && user.role === "REP") {
     return {
       ...sanitized,
@@ -137,6 +201,64 @@ export function sanitizeRequestForUser(
   }
 
   return { ...sanitized, replies };
+}
+
+function safeProviderSummary(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const { providerInfo: _providerInfo, ...summary } = value as Record<string, unknown>;
+  return summary;
+}
+
+function safeShareSummaries(value: unknown): unknown {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((share) => {
+    if (!share || typeof share !== "object") return [];
+    const item = share as Record<string, unknown>;
+    const rawUser = item.user;
+    if (!rawUser || typeof rawUser !== "object") return [];
+    const user = rawUser as Record<string, unknown>;
+    const rawProfile = user.providerInfo;
+    const profile = rawProfile && typeof rawProfile === "object" ? rawProfile as Record<string, unknown> : null;
+    const organizationId = profile?.organizationId;
+    const rawMemberships = user.providerSiteMemberships;
+    const providerSiteMemberships = Array.isArray(rawMemberships)
+      ? rawMemberships.flatMap((membership) => {
+          if (!membership || typeof membership !== "object") return [];
+          const siteMembership = membership as Record<string, unknown>;
+          if (organizationId && siteMembership.organizationId !== organizationId) return [];
+          const rawSite = siteMembership.site;
+          return [{
+            department: siteMembership.department ?? null,
+            site: rawSite && typeof rawSite === "object"
+              ? { name: (rawSite as Record<string, unknown>).name ?? null }
+              : null,
+          }];
+        })
+      : [];
+    const rawSharedBy = item.sharedBy;
+    const sharedBy = rawSharedBy && typeof rawSharedBy === "object"
+      ? { id: (rawSharedBy as { id?: string }).id, name: (rawSharedBy as { name?: string }).name }
+      : null;
+    return [{
+      id: item.id,
+      reason: item.reason,
+      createdAt: item.createdAt,
+      requestAccess: item.requestAccess === true,
+      phiAccess: item.phiAccess === true,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        providerInfo: profile ? {
+          jobTitle: profile.jobTitle ?? null,
+          facilityName: profile.facilityName ?? null,
+          department: profile.department ?? null,
+        } : null,
+        providerSiteMemberships,
+      },
+      sharedBy,
+    }];
+  });
 }
 
 export async function getProviderOrgContext(userId: string) {

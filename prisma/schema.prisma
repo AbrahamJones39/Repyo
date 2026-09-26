@@ -84,6 +84,11 @@ enum RoutingEventType {
   COVERAGE_EXPANDED
   ALERT_STOPPED
   KILL_SWITCH_APPLIED
+  REQUEST_SHARED
+  REQUEST_UNSHARED
+  HANDOFF_CREATED
+  SHARED_USER_OPENED_REQUEST
+  PHI_VIEWED
 }
 
 enum CoverageResponseStatus {
@@ -279,6 +284,8 @@ model User {
   requestReplies          RequestReply[]
   authTickets             AuthTicket[]
   coverageEvents          RequestCoverageEvent[]
+  requestSharesReceived  RequestShare[] @relation("RequestShareRecipient")
+  requestSharesCreated   RequestShare[] @relation("RequestShareCreator")
 }
 
 model Company {
@@ -801,6 +808,7 @@ model ServiceRequest {
   phiAccessLogs  PhiAccessLog[]
   forwards       RequestForward[]
   coverageEvents RequestCoverageEvent[]
+  shares        RequestShare[]
 
   @@index([providerId])
   @@index([alertActive, nextAlertAt])
@@ -835,6 +843,26 @@ model RequestForward {
   @@index([originalRepId])
   @@index([forwardedToId])
   @@index([forwardedById])
+}
+
+/// Request-only access granted to a verified coworker. PHI access is never implied.
+model RequestShare {
+  id         String    @id @default(uuid())
+  requestId  String
+  userId     String
+  sharedById String
+  reason     String
+  requestAccess Boolean @default(true)
+  phiAccess     Boolean @default(false)
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  request  ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user     User           @relation("RequestShareRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  sharedBy User           @relation("RequestShareCreator", fields: [sharedById], references: [id])
+
+  @@index([requestId, revokedAt])
+  @@index([userId, revokedAt])
 }
 
 model RequestStatusLog {

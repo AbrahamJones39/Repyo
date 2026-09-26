@@ -106,4 +106,8 @@ export const GENERIC_NOTIFICATION = {
     title: "New note on a request",
     body: "Someone left a clarification note. Open GoRepYo to read it.",
   },
+  requestShared: {
+    title: "A request was shared with you",
+    body: "A coworker shared a rep request. Open GoRepYo to follow it. Patient details are not included.",
+  },
 } as const;

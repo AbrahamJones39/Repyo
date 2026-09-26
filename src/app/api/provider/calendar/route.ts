@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sharedWithProviderWhere } from "@/lib/request-shares";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -17,14 +18,27 @@ export async function GET(request: Request) {
   const rangeStart = new Date(year, monthIndex, 1);
   const rangeEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
+  const profile = await db.providerProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { organizationId: true, accountStatus: true },
+  });
+  const canReceiveShares = session.user.accountState === "VERIFIED"
+    && profile?.accountStatus === "ACTIVE"
+    && Boolean(profile.organizationId);
   const requests = await db.serviceRequest.findMany({
     where: {
-      providerId: session.user.id,
+      OR: [
+        { providerId: session.user.id },
+        ...(canReceiveShares && profile?.organizationId
+          ? [sharedWithProviderWhere(session.user.id, profile.organizationId)]
+          : []),
+      ],
       scheduledAt: { gte: rangeStart, lte: rangeEnd },
       status: { notIn: ["CANCELLED", "DECLINED"] },
     },
     select: {
       id: true,
+      providerId: true,
       facilityName: true,
       procedureType: true,
       scheduledAt: true,
@@ -47,6 +61,7 @@ export async function GET(request: Request) {
       urgency: r.urgency,
       assignedRep: r.assignedRep,
       companyName: r.company.name,
+      isSharedWithMe: r.providerId !== session.user.id,
     })),
   });
 }

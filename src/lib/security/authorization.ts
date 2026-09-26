@@ -91,8 +91,12 @@ export function canViewRequestPhi(
     status: RequestStatus;
     acknowledgedAt?: Date | string | null;
   },
-  options?: { isDelegatedAdmin?: boolean }
+  options?: { isDelegatedAdmin?: boolean; isSharedProvider?: boolean; sharedPhiAccess?: boolean }
 ): boolean {
+  if (options?.isSharedProvider) {
+    return Boolean(options.sharedPhiAccess) && request.status !== "CANCELLED" && request.status !== "DECLINED";
+  }
+
   if (request.status === "CANCELLED" || request.status === "DECLINED") {
     if (user.role === "PROVIDER" && request.providerId === user.id) return true;
     return false;
@@ -140,8 +144,9 @@ export function canViewDeviceIdentifiers(
     companyId: string;
     status: RequestStatus;
   },
-  options?: { isDelegatedAdmin?: boolean }
+  options?: { isDelegatedAdmin?: boolean; isSharedProvider?: boolean; sharedPhiAccess?: boolean }
 ): boolean {
+  if (options?.isSharedProvider && !options.sharedPhiAccess) return false;
   if (canViewRequestPhi(user, request, options)) return true;
 
   if (
@@ -178,10 +183,11 @@ export function canAccessRequestRecord(
     companyId: string;
     escalatedToId?: string | null;
   },
-  options?: { delegatedAdminIds?: string[]; scopedRepIds?: string[] }
+  options?: { delegatedAdminIds?: string[]; scopedRepIds?: string[]; isSharedWithUser?: boolean }
 ): boolean {
   if (user.role === "SUPER_ADMIN") return true;
   if (user.role === "PROVIDER" && request.providerId === user.id) return true;
+  if (user.role === "PROVIDER" && options?.isSharedWithUser) return true;
   if (user.role === "REP") {
     if (request.assignedRepId === user.id) return true;
     if (request.initiatedByRepId === user.id) return true;

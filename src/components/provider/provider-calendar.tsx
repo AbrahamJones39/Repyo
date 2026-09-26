@@ -40,6 +40,7 @@ interface CalendarRequest {
   urgency: string;
   companyName: string;
   assignedRep: { id: string; name: string } | null;
+  isSharedWithMe?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -176,7 +177,7 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
             loading={loading}
             events={(requestsByDay.get(format(viewDate, "yyyy-MM-dd")) ?? []).map((req) => ({
               id: req.id,
-              title: req.facilityName,
+              title: req.isSharedWithMe ? `Shared · ${req.facilityName}` : req.facilityName,
               subtitle: req.assignedRep?.name ?? req.companyName,
               startAt: req.scheduledAt,
               className: STATUS_COLORS[req.status] ?? "bg-slate-100 text-slate-700 border-slate-200",
@@ -238,7 +239,7 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
                             )}
                             title={`${req.facilityName}${req.assignedRep ? ` — ${req.assignedRep.name}` : ""}`}
                           >
-                            {format(new Date(req.scheduledAt), "h:mm a")} {req.facilityName}
+                            {format(new Date(req.scheduledAt), "h:mm a")} {req.isSharedWithMe ? "Shared · " : ""}{req.facilityName}
                           </button>
                         ))}
                         {dayRequests.length > 3 && (
@@ -278,7 +279,7 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
                 className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm transition hover:border-rose-200 hover:bg-rose-50/30"
               >
                 <div>
-                  <p className="font-medium text-slate-900">{req.facilityName}</p>
+                  <p className="font-medium text-slate-900">{req.isSharedWithMe ? "Shared · " : ""}{req.facilityName}</p>
                   <p className="text-xs text-slate-500">
                     {req.procedureType ?? "Request"} · {req.companyName}
                     {req.assignedRep ? ` · ${req.assignedRep.name}` : " · Awaiting rep"}

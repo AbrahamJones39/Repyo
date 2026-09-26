@@ -16,7 +16,8 @@ import {
   sanitizeRequestForUser,
   toSessionUser,
 } from "@/lib/security/sanitize-request";
-import { canAccessRequestRecord } from "@/lib/security/authorization";
+import { canAccessRequestRecord, canViewRequestPhi } from "@/lib/security/authorization";
+import { activeVerifiedProviderShares, isSharedWithActiveProvider, publicRequestActivity } from "@/lib/request-shares";
 import { assignRepSchema, updateRequestStatusSchema, forwardRequestSchema, declineRequestSchema } from "@/lib/validations";
 import {
   declineRequest,
@@ -42,7 +43,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const serviceRequest = await db.serviceRequest.findUnique({
     where: { id },
     include: {
-      provider: { select: { id: true, name: true, phone: true } },
+      provider: { select: { id: true, name: true, phone: true, providerInfo: { select: { organizationId: true } } } },
       assignedAdmin: { select: { id: true, name: true } },
       assignedRep: {
         select: {
@@ -58,7 +59,18 @@ export async function GET(_request: Request, context: RouteContext) {
         orderBy: { createdAt: "asc" },
         include: { author: { select: { id: true, name: true, role: true } } },
       },
-      routingEvents: { orderBy: { createdAt: "asc" } },
+      routingEvents: {
+        orderBy: { createdAt: "asc" },
+        include: { actor: { select: { name: true } } },
+      },
+      shares: {
+        where: { revokedAt: null },
+        include: {
+          user: { select: { id: true, name: true, role: true, accountState: true, providerInfo: { select: { organizationId: true, accountStatus: true, jobTitle: true, facilityName: true, department: true } }, providerSiteMemberships: { select: { organizationId: true, department: true, site: { select: { name: true } } } } } },
+          sharedBy: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
@@ -66,15 +78,21 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const activeShares = activeVerifiedProviderShares(serviceRequest);
+
   const delegatedAdminIds =
     user.role === "REP" ? await getDelegatedAdminIdsForRep(user.id) : [];
 
   const canAccess = canAccessRequestRecord(user, serviceRequest, {
     delegatedAdminIds,
+    isSharedWithUser: user.role === "PROVIDER" && serviceRequest.providerId !== user.id &&
+      isSharedWithActiveProvider(activeShares, user.id),
   });
   if (!canAccess) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const orgId = await getProviderOrgContext(user.id);
 
   const { acknowledgeCoverage } = await import("@/lib/coverage-alerts");
   const ack = await acknowledgeCoverage({
@@ -82,9 +100,11 @@ export async function GET(_request: Request, context: RouteContext) {
     userId: user.id,
     userRole: user.role,
   });
-  const requestForSanitize = ack.ok
-    ? { ...serviceRequest, acknowledgedAt: ack.acknowledgedAt, alertActive: false }
-    : serviceRequest;
+  const requestForSanitize = {
+    ...serviceRequest,
+    shares: activeShares,
+    ...(ack.ok ? { acknowledgedAt: ack.acknowledgedAt, alertActive: false } : {}),
+  };
 
   const isDelegatedAdmin =
     user.role === "REP" &&
@@ -93,11 +113,26 @@ export async function GET(_request: Request, context: RouteContext) {
         delegatedAdminIds.includes(serviceRequest.assignedAdminId)
     );
 
-  const sanitized = sanitizeRequestForUser(requestForSanitize, user, {
+  const myShare = activeShares.find((share) => share.userId === user.id && share.requestAccess);
+  const isSharedProvider = user.role === "PROVIDER" && serviceRequest.providerId !== user.id && Boolean(myShare);
+  const shareOptions = {
     isDelegatedAdmin,
-  });
+    isSharedProvider,
+    sharedPhiAccess: Boolean(myShare?.phiAccess),
+  };
+  const sanitized = sanitizeRequestForUser(requestForSanitize, user, shareOptions);
 
-  const orgId = await getProviderOrgContext(user.id);
+  if (isSharedProvider) {
+    await logRoutingEvent({
+      requestId: id,
+      eventType: "SHARED_USER_OPENED_REQUEST",
+      actorId: user.id,
+      actorRole: user.role,
+      organizationId: orgId,
+      companyId: serviceRequest.companyId,
+    });
+  }
+
   await logPhiAccess({
     requestId: id,
     userId: user.id,
@@ -107,15 +142,8 @@ export async function GET(_request: Request, context: RouteContext) {
     companyId: serviceRequest.companyId,
   });
 
-  const phiVisible =
-    "patientName" in sanitized && sanitized.patientName
-      ? true
-      : "deviceName" in sanitized && sanitized.deviceName
-        ? true
-        : "deviceSerial" in sanitized && sanitized.deviceSerial
-          ? true
-          : false;
-  if (phiVisible) {
+  const patientVisible = Boolean(sanitized.patientName || sanitized.patientDOB);
+  if (patientVisible) {
     await logPhiAccess({
       requestId: id,
       userId: user.id,
@@ -123,13 +151,18 @@ export async function GET(_request: Request, context: RouteContext) {
       accessType: "PHI_DISPLAYED",
       organizationId: orgId,
       companyId: serviceRequest.companyId,
-      metadata: {
-        fields: [
-          "patientName" in sanitized && sanitized.patientName ? "patient" : null,
-          "deviceName" in sanitized && sanitized.deviceName ? "device" : null,
-        ].filter(Boolean),
-      },
+      metadata: { fields: ["patient"] },
     });
+    await logRoutingEvent({
+      requestId: id,
+      eventType: "PHI_VIEWED",
+      actorId: user.id,
+      actorRole: user.role,
+      organizationId: orgId,
+      companyId: serviceRequest.companyId,
+    });
+  }
+  if (user.role === "REP" && (patientVisible || sanitized.deviceName || sanitized.deviceSerial)) {
     await logRoutingEvent({
       requestId: id,
       eventType: "REP_OPENED_REQUEST",
@@ -142,7 +175,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
   return NextResponse.json({
     ...sanitized,
-    routingHistory: serviceRequest.routingEvents,
+    activity: publicRequestActivity(requestForSanitize, {
+      includePhiEvents: canViewRequestPhi(user, serviceRequest, shareOptions),
+    }),
+    isRequestOwner: serviceRequest.providerId === user.id,
+    isSharedWithMe: isSharedProvider,
+    sharedWithMeBy: isSharedProvider ? myShare?.sharedBy.name ?? null : null,
+    sharedWithMeReason: isSharedProvider ? myShare?.reason ?? null : null,
   });
 }
 
@@ -249,16 +288,27 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
     });
 
-    if (status === "ACCEPTED" || status === "EN_ROUTE") {
-      if (existing.providerId) {
-        await tx.notification.create({
-          data: {
-            userId: existing.providerId,
+    if (["ACCEPTED", "EN_ROUTE", "ARRIVED", "COMPLETED"].includes(status)) {
+      const recipientIds = new Set<string>();
+      if ((status === "ACCEPTED" || status === "EN_ROUTE") && existing.providerId) {
+        recipientIds.add(existing.providerId);
+      }
+      const shares = await tx.requestShare.findMany({
+        where: { requestId: id, revokedAt: null, requestAccess: true },
+        select: { userId: true },
+      });
+      for (const share of shares) recipientIds.add(share.userId);
+      recipientIds.delete(sessionUser.id);
+      if (recipientIds.size > 0) {
+        await tx.notification.createMany({
+          data: [...recipientIds].map((userId) => ({
+            userId,
+            requestId: id,
             title: GENERIC_NOTIFICATION.statusUpdate.title,
             body: GENERIC_NOTIFICATION.statusUpdate.body,
             type: "REQUEST_STATUS",
             data: { requestId: id, status },
-          },
+          })),
         });
       }
     }

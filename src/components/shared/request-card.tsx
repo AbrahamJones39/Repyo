@@ -3,14 +3,15 @@
 import { StatusBadge, UrgencyBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusPipeline } from "@/components/shared/status-pipeline";
-import { format } from "date-fns";
-import { Heart, MapPin, Phone, User, X, Cpu, ArrowRightLeft } from "lucide-react";
+import { format, isToday, isTomorrow } from "date-fns";
+import { Heart, MapPin, Phone, User, X, Cpu, ArrowRightLeft, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api-client";
 import {
   RequestReplies,
   type RequestReply,
 } from "@/components/shared/request-replies";
+import { ShareRequestModal, type RequestShareInfo } from "@/components/provider/share-request-modal";
 
 export interface RequestData {
   id: string;
@@ -18,6 +19,7 @@ export interface RequestData {
   facilityAddr?: string;
   facilityZipCode?: string | null;
   procedureType: string;
+  requestType?: string;
   urgency: string;
   status: string;
   scheduledAt: string;
@@ -45,6 +47,12 @@ export interface RequestData {
   coverageStatus?: string | null;
   statusLogs?: { status: string; createdAt: string; note?: string | null }[];
   replies?: RequestReply[];
+  shares?: RequestShareInfo[];
+  activity?: { id: string; at: string; label: string }[];
+  isRequestOwner?: boolean;
+  isSharedWithMe?: boolean;
+  sharedWithMeBy?: string | null;
+  sharedWithMeReason?: string | null;
 }
 
 interface RepOption {
@@ -75,11 +83,12 @@ export function RequestCard({
   currentUserId?: string;
   onRefresh?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(showPipeline);
+  const [expanded, setExpanded] = useState(showPipeline && !request.isSharedWithMe);
   const [selectedRepId, setSelectedRepId] = useState("");
   const [opening, setOpening] = useState(false);
   const [localRequest, setLocalRequest] = useState(request);
   const [openError, setOpenError] = useState("");
+  const [showShareModal, setShowShareModal] = useState(false);
 
   useEffect(() => {
     setLocalRequest(request);
@@ -125,6 +134,19 @@ export function RequestCard({
     }
   }
 
+  async function toggleExpanded() {
+    if (localRequest.isSharedWithMe && !expanded) {
+      try {
+        const detail = await fetchJson<RequestData>(`/api/requests/${localRequest.id}`);
+        setLocalRequest((prev) => ({ ...prev, ...detail }));
+      } catch (err) {
+        setOpenError(err instanceof Error ? err.message : "Could not open request");
+        return;
+      }
+    }
+    setExpanded((value) => !value);
+  }
+
   async function respond(action: "ACCEPTED" | "FORWARD" | "DECLINE") {
     if (!localRequest.acknowledgedAt) {
       const ok = await acknowledge();
@@ -153,7 +175,13 @@ export function RequestCard({
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm text-slate-600">{localRequest.procedureType}</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {localRequest.requestType === "CHECK" ? "Check — " : localRequest.requestType === "CASE" ? "Case — " : ""}
+              {localRequest.procedureType}
+            </p>
+            {localRequest.physicianName && (
+              <p className="text-sm text-slate-800">{localRequest.physicianName}</p>
+            )}
             {localRequest.facilityAddr && (
               <p className="text-xs text-slate-500">{localRequest.facilityAddr}</p>
             )}
@@ -169,9 +197,9 @@ export function RequestCard({
                 Acknowledged — choose Accept, Forward, or Decline
               </p>
             )}
-            {role === "company" && localRequest.provider && (
+            {role !== "provider" && localRequest.provider && (
               <p className="text-xs text-slate-500">
-                Provider: {localRequest.provider.name}
+                {role === "company" ? "Provider" : "Created by"}: {localRequest.provider.name}
               </p>
             )}
             {!localRequest.provider && localRequest.initiatedByRep && (
@@ -184,19 +212,44 @@ export function RequestCard({
                 Requester: {localRequest.requesterName}
               </p>
             )}
+            {localRequest.isSharedWithMe && (
+              <div className="mt-2 space-y-0.5 text-xs text-rose-800">
+                <p>Created by: {localRequest.provider?.name ?? localRequest.initiatedByRep?.name ?? "A coworker"}</p>
+                <p>Shared with you by: {localRequest.sharedWithMeBy ?? "a coworker"}</p>
+                {localRequest.sharedWithMeReason && <p>Reason: {localRequest.sharedWithMeReason}</p>}
+                {localRequest.phiRestricted !== false && <p className="font-medium">Patient details restricted</p>}
+              </div>
+            )}
+            {role === "provider" && coverageSummary(localRequest) && (
+              <p className="mt-1 text-xs font-medium text-slate-700">{coverageSummary(localRequest)}</p>
+            )}
             {role !== "company" && localRequest.company && (
               <p className="text-xs text-slate-500">{localRequest.company.name}</p>
             )}
             <p className="mt-1 text-xs text-slate-500">
-              {format(new Date(localRequest.scheduledAt), "MMM d, yyyy 'at' h:mm a")}
+              {scheduleLabel(localRequest.scheduledAt)}
             </p>
           </div>
           <StatusBadge status={localRequest.status} />
         </div>
 
-        {(expanded || showPipeline) && (
+        <PeopleWithAccess request={localRequest} />
+
+        {(expanded || (showPipeline && !localRequest.isSharedWithMe)) && (
           <div className="mt-4 border-t border-slate-100 pt-4">
             <StatusPipeline currentStatus={localRequest.status} />
+            {(localRequest.activity?.length ?? 0) > 0 && (
+              <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Activity</p>
+                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-slate-600">
+                  {localRequest.activity?.map((item) => (
+                    <li key={item.id}>
+                      {format(new Date(item.at), "h:mm a")} — {item.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {localRequest.department && (
               <p className="mt-2 text-xs text-slate-500">
                 {localRequest.department}
@@ -254,17 +307,19 @@ export function RequestCard({
           </div>
         )}
 
-        <RequestReplies
-          requestId={localRequest.id}
-          replies={localRequest.replies ?? []}
-          currentUserId={currentUserId}
-          onPosted={(reply) =>
-            setLocalRequest((prev) => ({
-              ...prev,
-              replies: [...(prev.replies ?? []), reply],
-            }))
-          }
-        />
+        {!localRequest.isSharedWithMe && (
+          <RequestReplies
+            requestId={localRequest.id}
+            replies={localRequest.replies ?? []}
+            currentUserId={currentUserId}
+            onPosted={(reply) =>
+              setLocalRequest((prev) => ({
+                ...prev,
+                replies: [...(prev.replies ?? []), reply],
+              }))
+            }
+          />
+        )}
 
         {localRequest.assignedRep && (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm">
@@ -307,6 +362,12 @@ export function RequestCard({
       )}
 
       <div className="mt-auto flex flex-col gap-2 pt-4">
+        {role === "provider" && localRequest.isRequestOwner && (
+          <Button size="sm" variant="outline" onClick={() => setShowShareModal(true)}>
+            <Share2 className="h-4 w-4" />
+            Share / Handoff
+          </Button>
+        )}
         {isAssignedRep && localRequest.status === "REQUESTING" && onAction && (
           <div className="grid gap-2">
             {needsAck && (
@@ -326,8 +387,8 @@ export function RequestCard({
           </div>
         )}
 
-        {!showPipeline && !needsAck && (
-          <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>
+        {(!showPipeline || localRequest.isSharedWithMe) && !needsAck && (
+          <Button size="sm" variant="ghost" onClick={() => void toggleExpanded()}>
             {expanded ? "Hide" : "Track"} Status
           </Button>
         )}
@@ -409,6 +470,8 @@ export function RequestCard({
         )}
 
         {role === "provider" &&
+          localRequest.isRequestOwner !== false &&
+          !localRequest.isSharedWithMe &&
           !["COMPLETED", "CANCELLED", "DECLINED"].includes(localRequest.status) &&
           onAction && (
             <Button
@@ -421,6 +484,103 @@ export function RequestCard({
             </Button>
           )}
       </div>
+      {showShareModal && (
+        <ShareRequestModal
+          requestId={localRequest.id}
+          shares={localRequest.shares ?? []}
+          onClose={() => setShowShareModal(false)}
+          onChange={() => onRefresh?.()}
+        />
+      )}
+    </div>
+  );
+}
+
+function scheduleLabel(iso: string) {
+  const date = new Date(iso);
+  const day = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "MMM d, yyyy");
+  return `${day} · ${format(date, "h:mm a")}`;
+}
+
+function coverageSummary(request: RequestData) {
+  const name = request.assignedRep?.name;
+  switch (request.status) {
+    case "REQUESTING":
+      return name ? `Waiting for ${name}` : "Waiting for a rep";
+    case "ACCEPTED":
+      return name ? `${name} accepted` : "Rep accepted";
+    case "EN_ROUTE":
+      return name ? `${name} is on the way` : "Rep is on the way";
+    case "ARRIVED":
+      return name ? `${name} arrived` : "Rep arrived";
+    case "COMPLETED":
+      return "Completed";
+    case "CANCELLED":
+      return "Cancelled";
+    case "DECLINED":
+      return "Declined";
+    default:
+      return "";
+  }
+}
+
+function repAccessLabel(status: string) {
+  switch (status) {
+    case "ACCEPTED":
+      return "Accepted / Assigned";
+    case "EN_ROUTE":
+      return "On the way";
+    case "ARRIVED":
+      return "Arrived";
+    case "COMPLETED":
+      return "Completed";
+    case "DECLINED":
+      return "Declined";
+    default:
+      return "Notified";
+  }
+}
+
+function PeopleWithAccess({ request }: { request: RequestData }) {
+  const rows = [
+    request.provider ? { key: `creator-${request.provider.id}`, name: request.provider.name, detail: "Creator" } : null,
+    request.initiatedByRep && !request.provider
+      ? { key: `rep-creator-${request.initiatedByRep.id}`, name: request.initiatedByRep.name, detail: "Created by rep" }
+      : null,
+    request.physicianName
+      ? { key: "physician", name: request.physicianName, detail: "Requesting physician" }
+      : null,
+    ...(request.shares ?? []).map((share) => ({
+      key: share.id,
+      name: share.user.name,
+      detail: `Shared · ${share.reason}`,
+      permissions: true,
+      phiAccess: share.phiAccess === true,
+    })),
+    request.assignedRep
+      ? { key: `assigned-${request.assignedRep.id}`, name: `Rep: ${request.assignedRep.name}`, detail: repAccessLabel(request.status) }
+      : null,
+  ].filter((row): row is { key: string; name: string; detail: string; permissions?: boolean; phiAccess?: boolean } => Boolean(row));
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        People with access ({rows.length})
+      </p>
+      <ul className="mt-2 space-y-2 text-xs text-slate-700">
+        {rows.map((row) => (
+          <li key={row.key}>
+            <p>{row.name} — {row.detail}</p>
+            {row.permissions && (
+              <p className="text-[11px] text-slate-500">
+                Request access ✓ · PHI access {row.phiAccess ? "✓" : "— Restricted"}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

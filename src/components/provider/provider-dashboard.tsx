@@ -9,6 +9,7 @@ import { ApiError, connectEventSource, fetchJson } from "@/lib/api-client";
 import type { FacilityDefaults, RequesterDefaults } from "@/lib/request-form-types";
 import { Plus, RefreshCw, UserPlus } from "lucide-react";
 import { InviteModal } from "@/components/invitations/invite-modal";
+import { cn } from "@/lib/utils";
 
 interface ProviderDashboardProps {
   userName: string;
@@ -30,6 +31,7 @@ export function ProviderDashboard({
   const [error, setError] = useState("");
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [phiEnabled, setPhiEnabled] = useState(true);
+  const [scope, setScope] = useState<"all" | "created" | "shared">("all");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -104,6 +106,12 @@ export function ProviderDashboard({
   const active = requests.filter(
     (r) => !["COMPLETED", "CANCELLED"].includes(r.status)
   );
+  const visible = active.filter((request) => {
+    if (scope === "created") return !request.isSharedWithMe;
+    if (scope === "shared") return Boolean(request.isSharedWithMe);
+    return true;
+  });
+  const sharedCount = active.filter((request) => request.isSharedWithMe).length;
 
   return (
     <PortalShell portal="provider" userName={userName}>
@@ -141,18 +149,49 @@ export function ProviderDashboard({
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {([
+          ["all", "All"],
+          ["created", "Created by me"],
+          ["shared", "Shared with me"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setScope(value)}
+            className={cn(
+              "rounded-lg px-4 py-2 text-sm font-medium transition",
+              scope === value
+                ? "bg-rose-600 text-white"
+                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+            )}
+          >
+            {label}
+            {value === "shared" && sharedCount > 0 ? ` (${sharedCount})` : ""}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="text-slate-500">Loading...</p>
-      ) : active.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center">
-          <p className="text-slate-600">No active requests</p>
-          <Button className="mt-4" onClick={() => setShowModal(true)} disabled={companies.length === 0}>
-            Request a Rep
-          </Button>
+          <p className="text-slate-600">
+            {scope === "shared"
+              ? "No requests have been shared with you."
+              : scope === "created"
+                ? "No active requests you created."
+                : "No active requests"}
+          </p>
+          {scope !== "shared" && (
+            <Button className="mt-4" onClick={() => setShowModal(true)} disabled={companies.length === 0}>
+              Request a Rep
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {active.map((req) => (
+          {visible.map((req) => (
             <RequestCard
               key={req.id}
               request={req}
@@ -160,6 +199,7 @@ export function ProviderDashboard({
               onAction={handleAction}
               onFavorite={handleFavorite}
               isFavorite={favorites.some((f) => f.id === req.assignedRep?.id)}
+              onRefresh={loadData}
             />
           ))}
         </div>
