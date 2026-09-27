@@ -344,11 +344,8 @@ export function RequestRepModal({
   }, [
     selectedCompany,
     selectedProduct,
-    activeFacility?.id,
-    activeFacility?.zipCode,
-    activeFacility?.lat,
-    activeFacility?.lng,
-    defaultFacility?.zip,
+    activeFacility,
+    defaultFacility,
     preferredRepId,
     currentRepId,
     isRepMode,
@@ -357,7 +354,8 @@ export function RequestRepModal({
   ]);
 
   useEffect(() => {
-    loadReps();
+    const kickoff = window.setTimeout(() => void loadReps(), 0);
+    return () => window.clearTimeout(kickoff);
   }, [loadReps]);
 
   const availableIds = useMemo(
@@ -742,7 +740,7 @@ export function RequestRepModal({
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-rose-600" /><h4 className="text-sm font-semibold text-slate-900">{isRepMode ? "Assign a rep" : "Rep assignment"}</h4></div>{!loadingReps && !isRepMode && <span className="text-xs text-slate-500">{availableReps.length} available</span>}</div>
                   {loadingReps ? <p className="py-6 text-center text-sm text-slate-500">Finding eligible reps…</p> : isRepMode ? companyReps.length === 0 ? <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">No reps found for your company. Select a device company above.</div> : <div className="max-h-[26rem] space-y-2 overflow-y-auto">{companyReps.map((rep) => <RepOption key={rep.id} rep={rep} subtitle={rep.id === currentRepId ? "You" : rep.companyName} />)}</div> : <div className="max-h-[26rem] space-y-2 overflow-y-auto">
                     <button type="button" onClick={() => setSelectedRepId(null)} className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left transition", selectedRepId === null ? "border-rose-300 bg-rose-50 ring-1 ring-rose-200" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
-                      <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border", selectedRepId === null ? "border-rose-600 bg-rose-600" : "border-slate-300")}>{selectedRepId === null && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span><span><span className="flex items-center gap-2 font-medium text-slate-900"><Sparkles className="h-4 w-4 text-rose-500" />Auto-assign closest eligible rep</span><span className="mt-1 block text-xs text-slate-500">We’ll route this to an available rep who covers this facility.</span></span>
+                      <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border", selectedRepId === null ? "border-rose-600 bg-rose-600" : "border-slate-300")}>{selectedRepId === null && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span><span><span className="flex items-center gap-2 font-medium text-slate-900"><Sparkles className="h-4 w-4 text-rose-500" />Auto-route to covering account manager</span><span className="mt-1 block text-xs text-slate-500">Routes to a company manager who selected this exact facility for team coverage.</span></span>
                     </button>
                     {availableFavoriteReps.length > 0 && <><p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Favorite reps</p>{availableFavoriteReps.map((rep) => <RepOption key={rep.id} rep={rep} badge={<span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700"><Heart className="h-3 w-3 fill-current" />Favorite</span>} />)}</>}
                     {otherAvailableReps.map((rep) => <RepOption key={rep.id} rep={rep} />)}
@@ -778,7 +776,7 @@ export function RequestRepModal({
                     ["Requester", [reviewFields.requesterName || defaultRequester?.name, reviewFields.requesterPhone || defaultRequester?.phone].filter(Boolean).join(" · ") || "—"],
                     ["Device company", company?.name || "Choose a device company"],
                     ["Product", selectedProduct || "Any product"],
-                    ["Assigned rep", selectedRep?.name || (isRepMode ? "Select a rep" : "Auto-assign closest eligible rep")],
+                    ["Assigned rep", selectedRep?.name || (isRepMode ? "Select a rep" : "Auto-route to covering account manager")],
                     ...(phiEnabled ? [["Patient", patientName || "—"], ["Date of birth", patientDOB || "—"], ...(isProcedure ? [["Room", reviewFields.patientRoom || "—"]] : []), ["Manufacturer", deviceManufacturer || "—"]] : []),
                     ["Notes", reviewFields.notes || reviewFields.appointmentDetails || "—"],
                   ].map(([label, value]) => <div key={label} className="border-b border-slate-100 px-4 py-3 sm:px-5"><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd></div>)}

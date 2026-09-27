@@ -20,6 +20,8 @@ export async function GET(_request: Request, context: RouteContext) {
       assignedAdminId: true,
       escalatedToId: true,
       acknowledgedAt: true,
+      alertActive: true,
+      status: true,
     },
   });
 
@@ -37,5 +39,7 @@ export async function GET(_request: Request, context: RouteContext) {
     scheduledAt: request.scheduledAt,
     summary: "Device support requested",
     acknowledged: Boolean(request.acknowledgedAt),
+    alertActive: request.alertActive,
+    status: request.status,
   });
 }

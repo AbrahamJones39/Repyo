@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { canActAsAdminForRequest } from "@/lib/admin-matching";
 import { getDelegatedAdminIdsForRep } from "@/lib/admin-matching";
 import { db } from "@/lib/db";
@@ -93,17 +92,9 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const orgId = await getProviderOrgContext(user.id);
-
-  const { acknowledgeCoverage } = await import("@/lib/coverage-alerts");
-  const ack = await acknowledgeCoverage({
-    requestId: id,
-    userId: user.id,
-    userRole: user.role,
-  });
   const requestForSanitize = {
     ...serviceRequest,
     shares: activeShares,
-    ...(ack.ok ? { acknowledgedAt: ack.acknowledgedAt, alertActive: false } : {}),
   };
 
   const isDelegatedAdmin =

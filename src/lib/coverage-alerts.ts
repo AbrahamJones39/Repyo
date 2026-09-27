@@ -67,6 +67,7 @@ type AlertRequest = {
   escalatedToId: string | null;
   healthcareSiteId: string | null;
   status: string;
+  escalatedAt: Date | null;
   acknowledgedAt: Date | null;
   notifiedAt: Date | null;
   alertActive: boolean;
@@ -124,6 +125,23 @@ async function recordCoverage(params: {
       respondedAt: params.respondedAt ?? null,
       escalatedAt: params.escalatedAt ?? null,
       deliveryStatus: params.deliveryStatus ?? "UNKNOWN",
+    },
+  });
+}
+
+async function latestCoverageEvent(params: {
+  requestId: string;
+  assigneeId: string;
+  status: CoverageResponseStatus;
+}) {
+  return db.requestCoverageEvent.findFirst({
+    where: params,
+    orderBy: { createdAt: "desc" },
+    select: {
+      createdAt: true,
+      sentAt: true,
+      deliveredAt: true,
+      deliveryStatus: true,
     },
   });
 }
@@ -191,6 +209,7 @@ async function pushAlert(params: {
 export async function startCoverageAlert(requestId: string) {
   const request = await db.serviceRequest.findUnique({ where: { id: requestId } });
   if (!request) return;
+  if (request.alertActive && !request.acknowledgedAt) return;
   const assigneeId = currentAssigneeId(request);
   if (!assigneeId) return;
   if (["CANCELLED", "DECLINED", "COMPLETED"].includes(request.status)) return;
@@ -260,10 +279,38 @@ export async function stopCoverageAlerts(params: {
   });
   if (!request) return;
   if (!request.alertActive && params.reason !== "REASSIGNED") {
-    await db.notification.updateMany({
+    const now = new Date();
+    const stopped = await db.notification.updateMany({
       where: { requestId: params.requestId, stoppedAt: null, alertKind: { not: null } },
-      data: { stoppedAt: new Date(), read: true },
+      data: { stoppedAt: now, read: true },
     });
+    await db.serviceRequest.update({
+      where: { id: params.requestId },
+      data: {
+        nextAlertAt: null,
+        alertStoppedAt: now,
+        alertStopReason: params.reason,
+      },
+    });
+    if (stopped.count > 0) {
+      await logRoutingEvent({
+        requestId: params.requestId,
+        eventType: "ALERT_STOPPED",
+        actorId: params.actorId,
+        companyId: request.companyId,
+        metadata: { reason: params.reason },
+      });
+    }
+    const assigneeId = currentAssigneeId(request);
+    realtimeBus.emit("request:updated", { requestId: params.requestId, alertStopped: true });
+    if (assigneeId) {
+      realtimeBus.emit(`user:${assigneeId}`, {
+        type: "ALERT_STOPPED",
+        requestId: params.requestId,
+        reason: params.reason,
+        alert: false,
+      });
+    }
     return;
   }
 
@@ -324,8 +371,15 @@ export async function acknowledgeCoverage(params: {
   }
 
   const now = new Date();
-  await db.serviceRequest.update({
-    where: { id: params.requestId },
+  const updated = await db.serviceRequest.updateMany({
+    where: {
+      id: params.requestId,
+      assignedRepId: request.assignedRepId,
+      assignedAdminId: request.assignedAdminId,
+      escalatedToId: request.escalatedToId,
+      acknowledgedAt: null,
+      status: { in: ["REQUESTING", "ACCEPTED"] },
+    },
     data: {
       acknowledgedAt: now,
       acknowledgedById: params.userId,
@@ -336,19 +390,35 @@ export async function acknowledgeCoverage(params: {
       alertStopReason: "ACKNOWLEDGED",
     },
   });
+  if (!updated.count) {
+    const latest = await db.serviceRequest.findUnique({
+      where: { id: params.requestId },
+      select: { acknowledgedAt: true },
+    });
+    if (latest?.acknowledgedAt) {
+      return { ok: true as const, acknowledgedAt: latest.acknowledgedAt };
+    }
+    return { ok: false as const, error: "This request was reassigned or is no longer waiting" };
+  }
 
   await db.notification.updateMany({
     where: { requestId: params.requestId, stoppedAt: null, alertKind: { not: null } },
     data: { stoppedAt: now, read: true },
   });
 
+  const noticeEvent = await latestCoverageEvent({
+    requestId: params.requestId,
+    assigneeId: params.userId,
+    status: "NOTIFIED",
+  });
   await recordCoverage({
     requestId: params.requestId,
     assigneeId: params.userId,
     status: "ACKNOWLEDGED",
     acknowledgedAt: now,
-    sentAt: request.notifiedAt,
-    deliveryStatus: request.deliveryStatus ?? "UNKNOWN",
+    sentAt: noticeEvent?.sentAt ?? request.notifiedAt,
+    deliveredAt: noticeEvent?.deliveredAt ?? request.deliveredAt,
+    deliveryStatus: noticeEvent?.deliveryStatus ?? request.deliveryStatus ?? "UNKNOWN",
   });
 
   await logRoutingEvent({
@@ -415,15 +485,26 @@ export async function markCoverageDelivered(params: {
   });
 
   await db.notification.updateMany({
-    where: { requestId: params.requestId, userId: params.userId, deliveredAt: null },
+    where: {
+      requestId: params.requestId,
+      userId: params.userId,
+      alertKind: { not: null },
+      stoppedAt: null,
+      deliveredAt: null,
+    },
     data: { deliveredAt: now, deliveryStatus: "DELIVERED" },
   });
 
+  const noticeEvent = await latestCoverageEvent({
+    requestId: params.requestId,
+    assigneeId: params.userId,
+    status: "NOTIFIED",
+  });
   await recordCoverage({
     requestId: params.requestId,
     assigneeId: params.userId,
     status: "DELIVERED",
-    sentAt: request.notifiedAt,
+    sentAt: noticeEvent?.sentAt ?? request.notifiedAt,
     deliveredAt: now,
     deliveryStatus: "DELIVERED",
   });
@@ -439,33 +520,59 @@ export async function recordCoverageDecision(params: {
     where: { id: params.requestId },
     select: { notifiedAt: true, deliveredAt: true, deliveryStatus: true },
   });
+  const [noticeEvent, deliveryEvent] = await Promise.all([
+    latestCoverageEvent({ requestId: params.requestId, assigneeId: params.userId, status: "NOTIFIED" }),
+    latestCoverageEvent({ requestId: params.requestId, assigneeId: params.userId, status: "DELIVERED" }),
+  ]);
+  const currentDeliveryEvent =
+    noticeEvent && deliveryEvent && deliveryEvent.createdAt >= noticeEvent.createdAt
+      ? deliveryEvent
+      : null;
   await db.serviceRequest.update({
     where: { id: params.requestId },
     data:
       params.decision === "ACCEPTED"
-        ? { coverageStatus: "ACCEPTED", acceptedAt: now, declinedAt: null, alertActive: false }
-        : { coverageStatus: "DECLINED", declinedAt: now, alertActive: false, alertStopReason: "ACKNOWLEDGED" },
+        ? {
+            coverageStatus: "ACCEPTED",
+            acceptedAt: now,
+            declinedAt: null,
+            alertActive: false,
+            nextAlertAt: null,
+            alertStoppedAt: now,
+            alertStopReason: "ACKNOWLEDGED",
+          }
+        : {
+            coverageStatus: "DECLINED",
+            declinedAt: now,
+            alertActive: false,
+            nextAlertAt: null,
+            alertStoppedAt: now,
+            alertStopReason: "ACKNOWLEDGED",
+          },
   });
   await recordCoverage({
     requestId: params.requestId,
     assigneeId: params.userId,
     status: params.decision,
     respondedAt: now,
-    sentAt: request?.notifiedAt,
-    deliveredAt: request?.deliveredAt,
-    deliveryStatus: request?.deliveryStatus ?? "UNKNOWN",
+    sentAt: noticeEvent?.sentAt ?? request?.notifiedAt,
+    deliveredAt: currentDeliveryEvent?.deliveredAt ?? request?.deliveredAt,
+    deliveryStatus: currentDeliveryEvent?.deliveryStatus ?? noticeEvent?.deliveryStatus ?? request?.deliveryStatus ?? "UNKNOWN",
   });
-  if (params.decision === "DECLINED") {
-    await stopCoverageAlerts({ requestId: params.requestId, reason: "ACKNOWLEDGED", actorId: params.userId });
-  }
+  await stopCoverageAlerts({ requestId: params.requestId, reason: "ACKNOWLEDGED", actorId: params.userId });
 }
 
 async function expandRouting(request: AlertRequest, now: Date) {
-  if (request.routingExpandedAt) return;
-  await db.serviceRequest.update({
-    where: { id: request.id },
+  const claimed = await db.serviceRequest.updateMany({
+    where: {
+      id: request.id,
+      routingExpandedAt: null,
+      acknowledgedAt: null,
+      status: { in: ["REQUESTING", "ACCEPTED"] },
+    },
     data: { routingExpandedAt: now },
   });
+  if (!claimed.count) return;
 
   await logRoutingEvent({
     requestId: request.id,
@@ -546,19 +653,25 @@ async function escalateRequest(request: AlertRequest, now: Date) {
     select: { id: true, managerId: true, role: true, companyId: true },
   });
 
-  let targetId = missedUser?.managerId ?? null;
-  if (!targetId || targetId === missedUserId) {
-    targetId = request.assignedAdminId && request.assignedAdminId !== missedUserId
-      ? request.assignedAdminId
-      : null;
+  const eligibleManagerWhere = {
+    companyId: request.companyId,
+    accountState: "VERIFIED" as const,
+    disabledAt: null,
+    role: { in: ["COMPANY_ADMIN", "REP"] as ("COMPANY_ADMIN" | "REP")[] },
+  };
+  let target = missedUser?.managerId && missedUser.managerId !== missedUserId
+    ? await db.user.findFirst({
+        where: { id: missedUser.managerId, ...eligibleManagerWhere },
+        select: { id: true, role: true, companyId: true },
+      })
+    : null;
+  if (!target && request.assignedAdminId && request.assignedAdminId !== missedUserId) {
+    target = await db.user.findFirst({
+      where: { id: request.assignedAdminId, ...eligibleManagerWhere },
+      select: { id: true, role: true, companyId: true },
+    });
   }
-  if (!targetId) return false;
-
-  const target = await db.user.findUnique({
-    where: { id: targetId },
-    select: { id: true, role: true, companyId: true },
-  });
-  if (!target || target.companyId !== request.companyId) return false;
+  if (!target) return false;
   if (request.escalatedToId === target.id && request.assignedRepId === null && request.assignedAdminId === target.id) {
     return false;
   }
@@ -566,10 +679,16 @@ async function escalateRequest(request: AlertRequest, now: Date) {
   const timing = await companyTiming(request.companyId);
   const managerIsRep = target.role === "REP";
 
-  await stopCoverageAlerts({ requestId: request.id, reason: "ESCALATED" });
-
-  await db.serviceRequest.update({
-    where: { id: request.id },
+  const transitioned = await db.serviceRequest.updateMany({
+    where: {
+      id: request.id,
+      alertActive: true,
+      acknowledgedAt: null,
+      assignedRepId: request.assignedRepId,
+      assignedAdminId: request.assignedAdminId,
+      escalatedAt: request.escalatedAt,
+      status: { in: ["REQUESTING", "ACCEPTED"] },
+    },
     data: {
       missedByRepId: missedUser?.role === "REP" ? missedUser.id : undefined,
       assignedRepId: managerIsRep ? target.id : null,
@@ -589,6 +708,26 @@ async function escalateRequest(request: AlertRequest, now: Date) {
       nextAlertAt: new Date(now.getTime() + timing.firstReminderMin * 60_000),
       status: "REQUESTING",
     },
+  });
+  if (!transitioned.count) return false;
+
+  const stoppedAt = new Date();
+  await db.notification.updateMany({
+    where: { requestId: request.id, stoppedAt: null, alertKind: { not: null } },
+    data: { stoppedAt, read: true },
+  });
+  realtimeBus.emit(`user:${missedUserId}`, {
+    type: "ALERT_STOPPED",
+    requestId: request.id,
+    reason: "ESCALATED",
+    alert: false,
+  });
+  await logRoutingEvent({
+    requestId: request.id,
+    eventType: "ALERT_STOPPED",
+    companyId: request.companyId,
+    targetUserId: missedUserId,
+    metadata: { reason: "ESCALATED" },
   });
 
   await recordCoverage({
@@ -648,9 +787,11 @@ export async function processCoverageAlerts(limit = 40): Promise<number> {
 
   let acted = 0;
   for (const request of due) {
-    if (request.scheduledAt.getTime() < now.getTime() && request.alertActive) {
-      await stopCoverageAlerts({ requestId: request.id, reason: "EXPIRED" });
-      acted += 1;
+    if (request.scheduledAt.getTime() <= now.getTime()) {
+      if (request.alertActive) {
+        await stopCoverageAlerts({ requestId: request.id, reason: "EXPIRED" });
+        acted += 1;
+      }
       continue;
     }
     if (!request.notifiedAt) continue;
@@ -699,13 +840,22 @@ async function sendReminder(request: AlertRequest, phase: 1 | 2, timing: AlertTi
   const nextMinutes = phase === 1 ? timing.secondReminderMin : timing.escalateMin;
   const base = request.notifiedAt ?? new Date();
 
-  await db.serviceRequest.update({
-    where: { id: request.id },
+  const claimed = await db.serviceRequest.updateMany({
+    where: {
+      id: request.id,
+      alertActive: true,
+      acknowledgedAt: null,
+      alertPhase: request.alertPhase,
+      assignedRepId: request.assignedRepId,
+      assignedAdminId: request.assignedAdminId,
+      status: { in: ["REQUESTING", "ACCEPTED"] },
+    },
     data: {
       alertPhase: phase,
       nextAlertAt: new Date(base.getTime() + nextMinutes * 60_000),
     },
   });
+  if (!claimed.count) return;
 
   await pushAlert({
     userId: assigneeId,

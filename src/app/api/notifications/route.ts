@@ -3,16 +3,22 @@ import { db } from "@/lib/db";
 import { logPhiAccess } from "@/lib/security/audit";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const activeCoverageOnly = new URL(request.url).searchParams.get("activeCoverage") === "1";
   const notifications = await db.notification.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      ...(activeCoverageOnly
+        ? { alertKind: { not: null }, stoppedAt: null }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
-    take: 20,
+    take: activeCoverageOnly ? 100 : 20,
   });
 
   return NextResponse.json(notifications);

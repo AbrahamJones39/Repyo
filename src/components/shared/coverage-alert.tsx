@@ -19,6 +19,9 @@ type Preview = {
   facilityName: string;
   scheduledAt: string;
   summary: string;
+  acknowledged: boolean;
+  alertActive: boolean;
+  status: string;
 };
 
 function playAlert(haptic: boolean) {
@@ -48,26 +51,60 @@ function playAlert(haptic: boolean) {
 }
 
 export function CoverageAlert() {
-  const [alert, setAlert] = useState<ActiveAlert | null>(null);
+  const [alert, setAlertState] = useState<ActiveAlert | null>(null);
+  const alertRef = useRef<ActiveAlert | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [acknowledged, setAcknowledgedState] = useState(false);
+  const acknowledgedRef = useRef(false);
   const [forwarding, setForwarding] = useState(false);
   const [error, setError] = useState("");
   const played = useRef<Set<string>>(new Set());
+
+  const setAlert = useCallback((next: ActiveAlert | null) => {
+    alertRef.current = next;
+    setAlertState(next);
+  }, []);
+  const setAcknowledged = useCallback((next: boolean) => {
+    acknowledgedRef.current = next;
+    setAcknowledgedState(next);
+  }, []);
 
   const requestId = alert?.requestId ?? alert?.data?.requestId ?? null;
 
   const load = useCallback(async () => {
     try {
-      const rows = await fetchJson<ActiveAlert[]>("/api/notifications");
+      const rows = await fetchJson<ActiveAlert[]>("/api/notifications?activeCoverage=1");
       const active = (Array.isArray(rows) ? rows : []).find(
         (row) => row.alertKind && !row.stoppedAt && row.data?.sound
       );
-      setAlert(active ?? null);
+      const currentAlert = alertRef.current;
+      if (acknowledgedRef.current && currentAlert?.requestId) {
+        let latest: Preview;
+        try {
+          latest = await fetchJson<Preview>(`/api/requests/${currentAlert.requestId}/alert-preview`);
+        } catch {
+          // Fail closed if this user is no longer authorized for the request.
+          setAlert(null);
+          setAcknowledged(false);
+          setPreview(null);
+          return;
+        }
+        if (latest.acknowledged && latest.status === "REQUESTING") {
+          setPreview(latest);
+          return;
+        }
+        setAlert(null);
+        setAcknowledged(false);
+        setPreview(null);
+      }
       if (!active) {
+        setAlert(null);
         setPreview(null);
         return;
       }
+      if (active.id !== currentAlert?.id) setAcknowledged(false);
+      setAlert(active);
       if (!played.current.has(active.id)) {
         played.current.add(active.id);
         playAlert(Boolean(active.data?.haptic));
@@ -87,12 +124,12 @@ export function CoverageAlert() {
         }
       }
     } catch {
-      setAlert(null);
+      // Keep an already visible alert on transient network failures.
     }
-  }, []);
+  }, [setAlert, setAcknowledged]);
 
   useEffect(() => {
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 0);
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
       void Notification.requestPermission();
     }
@@ -100,13 +137,17 @@ export function CoverageAlert() {
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as { alert?: boolean; alertStopped?: boolean };
-        if (data.alertStopped) setAlert(null);
         if (data.alert || data.alertStopped) void load();
       } catch {
         void load();
       }
     };
-    return () => es.close();
+    const poll = window.setInterval(() => void load(), 10_000);
+    return () => {
+      es.close();
+      window.clearInterval(poll);
+      window.clearTimeout(initialLoad);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -118,12 +159,23 @@ export function CoverageAlert() {
 
   async function acknowledge() {
     if (!requestId) return;
-    await fetchJson(`/api/requests/${requestId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ACKNOWLEDGE" }),
-    });
-    setAlert(null);
+    setBusy(true);
+    setError("");
+    try {
+      const result = await fetchJson<{ acknowledgedAt: string }>(`/api/requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ACKNOWLEDGE" }),
+      });
+      setAcknowledged(true);
+      setPreview((current) => current ? { ...current, acknowledged: true, alertActive: false } : current);
+      const currentAlert = alertRef.current;
+      setAlert(currentAlert ? { ...currentAlert, stoppedAt: result.acknowledgedAt } : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not acknowledge request");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function run(action: "ACCEPT" | "DECLINE" | "FORWARD") {
@@ -131,7 +183,14 @@ export function CoverageAlert() {
     setBusy(true);
     setError("");
     try {
-      await acknowledge();
+      if (!acknowledged) {
+        await fetchJson(`/api/requests/${requestId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ACKNOWLEDGE" }),
+        });
+        setAcknowledged(true);
+      }
       if (action === "FORWARD") {
         setForwarding(true);
         setBusy(false);
@@ -150,9 +209,11 @@ export function CoverageAlert() {
           body: JSON.stringify({ status: "ACCEPTED" }),
         });
       }
+      setAlert(null);
+      setAcknowledged(false);
+      setPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the request");
-      setAlert(null);
     } finally {
       setBusy(false);
     }
@@ -175,23 +236,28 @@ export function CoverageAlert() {
                 {format(new Date(preview.scheduledAt), "EEE • h:mm a")}
               </p>
             )}
-            <p className="mt-3 text-xs text-slate-500">
-              Ordinary notification. It does not bypass silent or Focus mode.
-            </p>
+            {!acknowledged ? (
+              <p className="mt-3 text-sm text-slate-600">
+                Acknowledge to stop repeat alerts. This does not accept the request.
+              </p>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-emerald-700">
+                Acknowledged. Choose what to do next.
+              </p>
+            )}
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             <div className="mt-5 grid gap-2">
-              <Button size="lg" disabled={busy} onClick={() => void acknowledge()}>
-                Acknowledge
-              </Button>
-              <Button size="lg" disabled={busy} onClick={() => void run("ACCEPT")}>
-                Accept
-              </Button>
-              <Button size="lg" variant="outline" disabled={busy} onClick={() => void run("FORWARD")}>
-                Forward
-              </Button>
-              <Button size="lg" variant="outline" disabled={busy} onClick={() => void run("DECLINE")}>
-                Decline
-              </Button>
+              {!acknowledged ? (
+                <Button size="lg" disabled={busy} onClick={() => void acknowledge()}>
+                  {busy ? "Acknowledging…" : "Acknowledge request"}
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" disabled={busy} onClick={() => void run("ACCEPT")}>Accept</Button>
+                  <Button size="lg" variant="outline" disabled={busy} onClick={() => void run("FORWARD")}>Forward</Button>
+                  <Button size="lg" variant="outline" disabled={busy} onClick={() => void run("DECLINE")}>Decline</Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -203,6 +269,8 @@ export function CoverageAlert() {
           onSuccess={() => {
             setForwarding(false);
             setAlert(null);
+            setAcknowledged(false);
+            setPreview(null);
           }}
         />
       )}

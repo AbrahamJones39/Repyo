@@ -299,7 +299,7 @@ export async function POST(request: Request) {
       scheduledAt,
     };
 
-    let assignRepId = isRepInitiated
+    const assignRepId = isRepInitiated
       ? data.assignRepId ?? data.preferredRepId ?? null
       : data.preferredRepId ?? null;
 
@@ -319,6 +319,16 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    }
+
+    if (!assignRepId && !matchedAdmin) {
+      return NextResponse.json(
+        {
+          error:
+            "No company manager has selected this facility for team coverage. Choose an available rep or ask a company manager to add this facility to their coverage.",
+        },
+        { status: 409 }
+      );
     }
 
     const serviceRequest = await db.serviceRequest.create({

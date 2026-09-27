@@ -190,7 +190,12 @@ export async function assignRepToRequest(
 ): Promise<{ assigned: boolean; repName?: string; error?: string }> {
   const existing = await db.serviceRequest.findUnique({
     where: { id: requestId },
-    select: { assignedRepId: true, originalRepId: true, companyId: true },
+    select: {
+      assignedRepId: true,
+      assignedAdminId: true,
+      originalRepId: true,
+      companyId: true,
+    },
   });
 
   const scheduledAt = criteria.scheduledAt ?? new Date();
@@ -235,8 +240,8 @@ export async function assignRepToRequest(
   );
 
   let etaMinutes: number | null = null;
-  let repLat: number | null = locationSharing ? rep.repProfile.lat : null;
-  let repLng: number | null = locationSharing ? rep.repProfile.lng : null;
+  const repLat: number | null = locationSharing ? rep.repProfile.lat : null;
+  const repLng: number | null = locationSharing ? rep.repProfile.lng : null;
 
   if (
     locationSharing &&
@@ -254,7 +259,8 @@ export async function assignRepToRequest(
     etaMinutes = estimateEtaMinutes(dist);
   }
 
-  if (existing?.assignedRepId && existing.assignedRepId !== repId) {
+  const previousAssigneeId = existing?.assignedRepId ?? existing?.assignedAdminId ?? null;
+  if (previousAssigneeId && previousAssigneeId !== repId) {
     const { stopCoverageAlerts } = await import("@/lib/coverage-alerts");
     await stopCoverageAlerts({
       requestId,

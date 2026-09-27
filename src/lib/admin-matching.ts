@@ -1,8 +1,5 @@
 import { db } from "./db";
-import {
-  listCompanyCoveredSites,
-  pickCoverageTargetSite,
-} from "./facility-routing";
+import { listCompanyCoveredSites } from "./facility-routing";
 
 type MatchedAdmin = {
   id: string;
@@ -15,8 +12,18 @@ export async function findMatchingAdmin(
   companyId: string,
   site: { id?: string | null; lat: number | null; lng: number | null } | null
 ): Promise<MatchedAdmin | null> {
+  // Auto-routing is a site-specific company decision. Do not route to an
+  // administrator merely because they cover a nearby facility.
+  if (!site?.id) return null;
+
   const admins = await db.user.findMany({
-    where: { role: "COMPANY_ADMIN", companyId },
+    where: {
+      role: "COMPANY_ADMIN",
+      companyId,
+      accountState: "VERIFIED",
+      disabledAt: null,
+    },
+    orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
@@ -27,14 +34,10 @@ export async function findMatchingAdmin(
   if (admins.length === 0) return null;
 
   const covered = (await listCompanyCoveredSites(companyId)).filter(
-    (row) => row.role === "COMPANY_ADMIN"
+    (row) => row.role === "COMPANY_ADMIN" && row.site.id === site.id
   );
-  const target = pickCoverageTargetSite(site, covered);
-  const covering = target.siteId
-    ? covered.filter((row) => row.site.id === target.siteId)
-    : [];
-
-  const match = admins.find((admin) => covering.some((row) => row.userId === admin.id));
+  const coveringIds = new Set(covered.map((row) => row.userId));
+  const match = admins.find((admin) => coveringIds.has(admin.id));
   if (!match) return null;
 
   return {
