@@ -33,14 +33,14 @@ export default async function AdminPage() {
   return (
     <PortalShell portal="admin" userName={session.user.name}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Platform Admin</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Platform Admin</h1>
         <p className="text-sm text-slate-600">System monitoring & tenant management</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => {
           const card = (
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-600">{stat.label}</p>
                 <stat.icon className="h-5 w-5 text-rose-500" />

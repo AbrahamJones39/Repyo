@@ -225,7 +225,7 @@ export function CompanyTeamsPage({ userName }: { userName: string }) {
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Teams</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Teams</h1>
           <p className="text-sm text-slate-600">
             Live team coverage — who&apos;s assigned, who&apos;s available, what&apos;s
             shared, and where gaps exist
@@ -276,7 +276,7 @@ export function CompanyTeamsPage({ userName }: { userName: string }) {
         </div>
       ) : tab === "manage" && canManageTeams ? (
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
             <h2 className="font-semibold text-slate-900">Create team</h2>
             <div className="mt-3 flex gap-2">
               <Input
@@ -290,7 +290,7 @@ export function CompanyTeamsPage({ userName }: { userName: string }) {
           {teams.map((team) => (
             <div
               key={team.id}
-              className="rounded-xl border border-slate-200 bg-white p-5"
+              className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -426,7 +426,7 @@ export function CompanyTeamsPage({ userName }: { userName: string }) {
             ))}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
             <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-slate-500">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                 <div key={d}>{d}</div>

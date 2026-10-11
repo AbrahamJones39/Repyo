@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { PortalShell } from "@/components/layout/portal-shell";
 import { RequestCard, type RequestData } from "@/components/shared/request-card";
 import { connectEventSource, fetchJson } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/loading";
+import { Segmented } from "@/components/ui/segmented";
 
 const TABS = ["created", "shared", "all", "active", "completed", "cancelled"] as const;
 
@@ -58,33 +59,26 @@ export function ProviderRequestsPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="provider" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">My Requests</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My Requests</h1>
       <p className="mt-1 text-sm text-slate-600">{requests.length} total requests</p>
 
       {error && (
         <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="mt-6 flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium capitalize transition",
-              tab === t
-                ? "bg-rose-600 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {t === "created" ? "Created by me" : t === "shared" ? "Shared with me" : t === "all" ? "All" : t}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        className="mt-6"
+        value={tab}
+        onChange={setTab}
+        options={TABS.map((t) => ({
+          value: t,
+          label: t === "created" ? "Created by me" : t === "shared" ? "Shared with me" : t === "all" ? "All" : t[0].toUpperCase() + t.slice(1),
+        }))}
+      />
 
       <div className="mt-6 grid auto-rows-fr gap-4 md:grid-cols-2">
         {loading ? (
-          <p className="text-slate-500">Loading...</p>
+          <LoadingState />
         ) : filtered.length === 0 ? (
           <p className="text-slate-500">No requests in this category.</p>
         ) : (

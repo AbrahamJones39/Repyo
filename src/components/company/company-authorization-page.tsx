@@ -71,7 +71,7 @@ export function CompanyAuthorizationPage({ userName }: { userName: string }) {
   return (
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Authorization Dossier</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Authorization Dossier</h1>
         <p className="mt-1 text-sm text-slate-600">
           Review how each rep or admin was verified and what access was granted
         </p>

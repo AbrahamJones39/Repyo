@@ -81,6 +81,17 @@ const NAV_CONFIG: Record<string, { title: string; items: NavItem[] }> = {
   },
 };
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return ((parts[0][0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+function isActive(pathname: string, href: string, rootHref: string) {
+  if (href === rootHref) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function PortalShell({
   portal,
   userName,
@@ -92,75 +103,134 @@ export function PortalShell({
 }) {
   const pathname = usePathname();
   const config = NAV_CONFIG[portal];
+  const rootHref = config.items[0]?.href ?? "/";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const current = config.items.find((item) => isActive(pathname, item.href, rootHref));
 
   const nav = (
     <>
-      {config.items.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={() => setMobileOpen(false)}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            pathname === item.href
-              ? "bg-rose-50 text-rose-700"
-              : "text-slate-600 hover:bg-slate-50"
-          )}
-        >
-          {item.icon}
-          {item.label}
+      {config.items.map((item) => {
+        const active = isActive(pathname, item.href, rootHref);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setMobileOpen(false)}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              active
+                ? "bg-rose-50 text-rose-700"
+                : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900"
+            )}
+          >
+            {active && (
+              <span className="absolute inset-y-1.5 -left-3 w-1 rounded-r-full bg-rose-600" aria-hidden />
+            )}
+            <span
+              className={cn(
+                "transition-colors",
+                active ? "text-rose-600" : "text-slate-400 group-hover:text-slate-600"
+              )}
+            >
+              {item.icon}
+            </span>
+            {item.label}
+          </Link>
+        );
+      })}
+    </>
+  );
+
+  const userCard = (
+    <div className="flex items-center gap-3 rounded-xl p-2">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-500 text-xs font-semibold text-white shadow-sm">
+        {initials(userName)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-slate-900">{userName}</p>
+        <p className="truncate text-xs text-slate-500">{config.title}</p>
+      </div>
+      <button
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        title="Sign out"
+        aria-label="Sign out"
+        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+      >
+        <LogOut className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  const sidebar = (
+    <>
+      <div className="flex h-16 items-center px-6">
+        <Link href="/" onClick={() => setMobileOpen(false)}>
+          <BrandMark size="sm" />
         </Link>
-      ))}
+      </div>
+      <div className="px-6 pb-2">
+        <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          {config.title}
+        </span>
+      </div>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">{nav}</nav>
+      <div className="border-t border-slate-200/70 p-3">{userCard}</div>
     </>
   );
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <aside className="hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="border-b border-slate-100 p-6">
-          <Link href="/">
-            <BrandMark size="sm" />
-          </Link>
-          <p className="mt-1 text-xs text-slate-500">{config.title}</p>
-        </div>
-        <nav className="flex-1 space-y-1 p-4">{nav}</nav>
-        <div className="border-t border-slate-100 p-4">
-          <p className="truncate text-sm font-medium text-slate-900">{userName}</p>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="mt-2 flex items-center gap-2 text-sm text-slate-500 hover:text-rose-600"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
+    <div className="flex min-h-screen bg-background">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white lg:flex">
+        {sidebar}
       </aside>
 
-      <CoverageAlert />
-      <main className="flex-1 overflow-auto">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-3">
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            aria-label="Close menu"
+            className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="animate-fade-in relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-2xl">
             <button
-              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Close menu"
+              className="absolute right-3 top-4 rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              onClick={() => setMobileOpen(false)}
             >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              <X className="h-5 w-5" />
+            </button>
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <CoverageAlert />
+      <main className="min-w-0 flex-1">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              aria-label="Open menu"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
             </button>
             <Link href="/" className="lg:hidden">
-              <BrandMark size="sm" />
+              <BrandMark size="sm" showIcon={false} />
             </Link>
+            {current && (
+              <div className="hidden min-w-0 items-center gap-2 text-sm lg:flex">
+                <span className="text-slate-400">{config.title}</span>
+                <span className="text-slate-300">/</span>
+                <span className="truncate font-medium text-slate-900">{current.label}</span>
+              </div>
+            )}
           </div>
           <NotificationBell />
         </header>
 
-        {mobileOpen && (
-          <div className="border-b border-slate-200 bg-white p-4 lg:hidden">
-            <nav className="space-y-1">{nav}</nav>
-          </div>
-        )}
-
-        <div className="bg-slate-50/50 p-4 lg:p-6">{children}</div>
+        <div className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );

@@ -10,6 +10,7 @@ import { ROLE_LABELS } from "@/lib/auth-utils";
 import { PROCEDURE_TYPES, QUALIFIED_STATUS_LABELS, REP_STATUS_LABELS } from "@/lib/utils";
 import type { Role } from "@prisma/client";
 import { Eye, EyeOff } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading";
 
 type Portal = "provider" | "rep" | "company" | "admin";
 
@@ -124,7 +125,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
       <h2 className="font-semibold text-slate-900">{title}</h2>
       {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">{children}</div>
@@ -313,13 +314,13 @@ export function MyProfilePage({
   return (
     <PortalShell portal={portal} userName={profile?.name ?? userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My Profile</h1>
         <p className="mt-1 text-sm text-slate-600">
           Your account details and the fields you can update yourself
         </p>
       </div>
 
-      {loading && <p className="text-slate-500">Loading...</p>}
+      {loading && <LoadingState />}
 
       {!loading && error && !profile && (
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -617,7 +618,7 @@ export function MyProfilePage({
 
           <form
             onSubmit={savePassword}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
           >
             <h2 className="font-semibold text-slate-900">Change password</h2>
             <p className="mt-1 text-sm text-slate-500">

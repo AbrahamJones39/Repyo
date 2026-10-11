@@ -155,7 +155,7 @@ export function AdminFacilitiesPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="admin" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Facilities</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Facilities</h1>
       <p className="mt-1 text-sm text-slate-600">
         Review user-submitted hospitals and clinics. Approve a new location, or
         merge it into the one Banner / Mayo / HonorHealth already in the
@@ -207,7 +207,7 @@ export function AdminFacilitiesPage({ userName }: { userName: string }) {
             return (
               <article
                 key={site.id}
-                className="rounded-xl border border-slate-200 bg-white p-5"
+                className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>

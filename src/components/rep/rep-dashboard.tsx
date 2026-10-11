@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Plus, UserPlus } from "lucide-react";
 import { InviteModal } from "@/components/invitations/invite-modal";
 import { ForwardRequestModal } from "@/components/shared/forward-request-modal";
+import { LoadingState } from "@/components/ui/loading";
 
 const REP_STATUSES = ["AVAILABLE", "BUSY", "OFF_DUTY", "VACATION"] as const;
 
@@ -182,7 +183,7 @@ export function RepDashboard({
     <PortalShell portal="rep" userName={userName}>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Rep Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Rep Dashboard</h1>
           <p className="text-sm text-slate-600">
             {pending.length} pending · {urgent.length} urgent
           </p>
@@ -204,7 +205,7 @@ export function RepDashboard({
       )}
 
       {teamMetrics && teamMetrics.reportCount > 0 && teamMetrics.totals && (
-        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-6 rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
           <h2 className="font-semibold text-slate-900">People you oversee</h2>
           <p className="mt-1 text-xs text-slate-500">
             Operational metrics for your reporting line. Patient information is not included.
@@ -218,9 +219,9 @@ export function RepDashboard({
               { label: "Completed", value: teamMetrics.totals.completed },
               { label: "Escalated", value: teamMetrics.totals.escalated },
             ].map((item) => (
-              <div key={item.label}>
-                <p className="text-xs text-slate-500">{item.label}</p>
-                <p className="text-xl font-bold text-slate-900">{item.value}</p>
+              <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-100">
+                <p className="text-xs font-medium text-slate-500">{item.label}</p>
+                <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{item.value}</p>
               </div>
             ))}
           </div>
@@ -231,33 +232,62 @@ export function RepDashboard({
       )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
           <p className="mb-3 text-sm font-medium text-slate-700">Your Status</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-4">
             {REP_STATUSES.map((s) => (
               <button
                 key={s}
                 onClick={() => updateStatus(s)}
+                aria-pressed={status === s}
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                  status === s ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                  status === s
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5"
+                    : "text-slate-500 hover:text-slate-900"
                 )}
               >
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    {
+                      AVAILABLE: "bg-emerald-500",
+                      BUSY: "bg-amber-500",
+                      OFF_DUTY: "bg-slate-400",
+                      VACATION: "bg-sky-500",
+                    }[s],
+                    status !== s && "opacity-50"
+                  )}
+                />
                 {REP_STATUS_LABELS[s]}
               </button>
             ))}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
           <p className="mb-3 text-sm font-medium text-slate-700">On-Call Schedule</p>
           <button
+            role="switch"
+            aria-checked={onCall}
             onClick={toggleOnCall}
-            className={cn(
-              "rounded-full px-4 py-2 text-sm font-medium transition",
-              onCall ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-600"
-            )}
+            className="group flex items-center gap-3"
           >
-            {onCall ? "On Call — Active" : "Off Call"}
+            <span
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                onCall ? "bg-rose-600" : "bg-slate-300"
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                  onCall ? "translate-x-5" : "translate-x-0.5"
+                )}
+              />
+            </span>
+            <span className={cn("text-sm font-medium", onCall ? "text-rose-700" : "text-slate-600")}>
+              {onCall ? "On call — active" : "Off call"}
+            </span>
           </button>
           <p className="mt-2 text-xs text-slate-500">
             On call does not bypass silent or Focus mode. A louder in-app repeat is available
@@ -268,7 +298,7 @@ export function RepDashboard({
 
       {adminRequests.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Admin Queue (Forwarded)
           </h2>
           <div className="grid auto-rows-fr gap-4 md:grid-cols-2">
@@ -289,7 +319,7 @@ export function RepDashboard({
 
       {urgent.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase text-red-600">ASAP Requests</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-red-600">ASAP Requests</h2>
           <div className="grid auto-rows-fr gap-4 md:grid-cols-2">
             {urgent.map((req) => (
               <RequestCard
@@ -306,9 +336,9 @@ export function RepDashboard({
       )}
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500">Your Assignments</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Your Assignments</h2>
         {loading ? (
-          <p className="text-slate-500">Loading...</p>
+          <LoadingState />
         ) : fieldRequests.length === 0 && adminRequests.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center">
             <p className="text-slate-600">No pending requests</p>

@@ -681,7 +681,7 @@ export function RequestRepModal({
                 <div><h3 className="text-base font-bold text-slate-900">Facility and requester information</h3><p className="text-sm text-slate-600">Your profile details are filled in when available.</p></div>
               </div>
               <div className="grid gap-5 lg:grid-cols-2">
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <section className="space-y-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-4 sm:p-5">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><MapPin className="h-4 w-4 text-rose-600" /><h4 className="text-sm font-semibold text-slate-900">Facility information</h4></div>
                   <FacilitySearchPicker selected={selectedFacility} onChange={setSelectedFacility} label="Hospital or clinic" helperText="Choose the facility. Requests route to eligible people who cover it." />
                   {activeFacility && <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{[activeFacility.address, activeFacility.city, activeFacility.state, activeFacility.zipCode].filter(Boolean).join(", ")}</div>}
@@ -692,7 +692,7 @@ export function RequestRepModal({
                     <Input label="Facility contact phone" name="facilityContactPhone" type="tel" defaultValue={defaultFacility?.contactPhone} required />
                   </div>
                 </section>
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <section className="space-y-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-4 sm:p-5">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><User className="h-4 w-4 text-rose-600" /><h4 className="text-sm font-semibold text-slate-900">Requester information</h4></div>
                   <Input label="Requester name" name="requesterName" defaultValue={defaultRequester?.name} required />
                   <Input label="Requester phone" name="requesterPhone" type="tel" defaultValue={defaultRequester?.phone} required />
@@ -714,7 +714,7 @@ export function RequestRepModal({
                   </button>;
                 })}
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
                 <p className="text-sm font-semibold text-slate-900">Timing</p>
                 <p className="mt-1 text-sm text-slate-600">Your request is marked <span className="font-semibold text-rose-700">{requestUrgency === "ASAP" ? "ASAP" : "Scheduled"}</span> based on the date and time you choose in the next step.</p>
               </div>
@@ -723,7 +723,7 @@ export function RequestRepModal({
             <section data-wizard-step="3" hidden={currentStep !== 3} className="space-y-5">
               <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-bold text-white">3</span><div><h3 className="text-base font-bold text-slate-900">Enter clinical details</h3><p className="text-sm text-slate-600">Add the details that help the right rep prepare.</p></div></div>
               <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <section className="space-y-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-4 sm:p-5">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><Stethoscope className="h-4 w-4 text-rose-600" /><h4 className="text-sm font-semibold text-slate-900">Procedure / appointment</h4></div>
                   {isProcedure ? <Select label="Procedure type" name="procedureType" required options={PROCEDURE_TYPES.map((p) => ({ value: p, label: p }))} /> : <Textarea label="Appointment details" name="appointmentDetails" rows={3} required placeholder="Reason for visit, device check details, etc." />}
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -736,7 +736,7 @@ export function RequestRepModal({
                   </div>
                   {isProcedure && <Textarea label="Additional notes (optional)" name="notes" rows={3} placeholder="Special equipment, preferences, or other details" />}
                 </section>
-                <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <section className="space-y-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-4 sm:p-5">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3"><div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-rose-600" /><h4 className="text-sm font-semibold text-slate-900">{isRepMode ? "Assign a rep" : "Rep assignment"}</h4></div>{!loadingReps && !isRepMode && <span className="text-xs text-slate-500">{availableReps.length} available</span>}</div>
                   {loadingReps ? <p className="py-6 text-center text-sm text-slate-500">Finding eligible reps…</p> : isRepMode ? companyReps.length === 0 ? <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">No reps found for your company. Select a device company above.</div> : <div className="max-h-[26rem] space-y-2 overflow-y-auto">{companyReps.map((rep) => <RepOption key={rep.id} rep={rep} subtitle={rep.id === currentRepId ? "You" : rep.companyName} />)}</div> : <div className="max-h-[26rem] space-y-2 overflow-y-auto">
                     <button type="button" onClick={() => setSelectedRepId(null)} className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left transition", selectedRepId === null ? "border-rose-300 bg-rose-50 ring-1 ring-rose-200" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
@@ -765,7 +765,7 @@ export function RequestRepModal({
 
             <section data-wizard-step="5" hidden={currentStep !== 5} className="space-y-5">
               <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-600 text-sm font-bold text-white">5</span><div><h3 className="text-base font-bold text-slate-900">Review and submit</h3><p className="text-sm text-slate-600">Check the request details before sending.</p></div></div>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-card">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-5"><div><h4 className="font-semibold text-slate-900">Request summary</h4><p className="mt-0.5 text-xs text-slate-500">{requestUrgency === "ASAP" ? "ASAP" : "Scheduled"} · {requestDateLabel} at {scheduledTime || "Choose a time"}</p></div><ClipboardCheck className="h-5 w-5 text-rose-600" /></div>
                 <dl className="grid gap-x-8 sm:grid-cols-2">
                   {[

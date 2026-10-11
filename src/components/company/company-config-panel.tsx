@@ -63,7 +63,7 @@ export function CompanyConfigPanel() {
 
   if (loading) {
     return (
-      <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <p className="text-sm text-slate-500">Loading company configuration...</p>
       </div>
     );
@@ -72,7 +72,7 @@ export function CompanyConfigPanel() {
   if (!config) return null;
 
   return (
-    <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+    <div className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
       <h2 className="font-semibold text-slate-900">Forward</h2>
       <p className="mt-1 text-sm text-slate-600">
         Forward is a permanent request action. A rep who knows the right person can send

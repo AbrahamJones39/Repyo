@@ -14,6 +14,7 @@ import {
   FacilitySearchPicker,
   type HealthcareSiteOption,
 } from "@/components/shared/facility-search-picker";
+import { LoadingState } from "@/components/ui/loading";
 
 interface Rep {
   id: string;
@@ -151,13 +152,13 @@ export function CompanyRequestsPage({
 
   return (
     <PortalShell portal="company" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Provider Requests</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Provider Requests</h1>
       <p className="mt-1 text-sm text-slate-600">
         Requests routed to the facilities you cover, or the nearest covered facility
       </p>
 
       {delegation && (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mt-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
           <h2 className="text-sm font-semibold text-slate-900">Forward requests to a rep</h2>
           <p className="mt-1 text-xs text-slate-500">
             Temporarily let a rep accept and assign requests on your behalf.
@@ -220,7 +221,7 @@ export function CompanyRequestsPage({
 
       <div className="mt-6 grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading ? (
-          <p className="text-slate-500">Loading...</p>
+          <LoadingState />
         ) : filtered.length === 0 ? (
           <p className="text-slate-500">No requests in this category.</p>
         ) : (
@@ -297,7 +298,7 @@ export function CompanyRepsPage({
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Rep Management</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Rep Management</h1>
           <p className="mt-1 text-sm text-slate-600">
             {reps.length} field rep{reps.length !== 1 ? "s" : ""} · {companyName}
           </p>
@@ -322,12 +323,12 @@ export function CompanyRepsPage({
       )}
 
       {loading ? (
-        <p className="mt-6 text-slate-500">Loading...</p>
+        <LoadingState className="mt-6" />
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3">Rep</th>
                 <th className="px-4 py-3">Manager</th>
                 <th className="px-4 py-3">Unit</th>
@@ -344,7 +345,7 @@ export function CompanyRepsPage({
                 </tr>
               ) : (
                 reps.map((rep) => (
-                  <tr key={rep.id} className="border-b border-slate-50 last:border-0">
+                  <tr key={rep.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/60">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">{rep.name}</p>
                       <p className="text-xs text-slate-500">{rep.email}</p>
@@ -666,7 +667,7 @@ export function CompanyAnalyticsPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="company" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Analytics</h1>
       <p className="mt-1 text-sm text-slate-600">
         Operational metrics for your unit and everyone below you. Patient information is not included.
         {data.scope && !data.scope.isCompanyWide ? " Scoped to your assigned organization units." : ""}
@@ -683,15 +684,15 @@ export function CompanyAnalyticsPage({ userName }: { userName: string }) {
           { label: "Median accept", value: data.medianAcceptMinutes != null ? `${data.medianAcceptMinutes}m` : "—" },
           { label: "Avg Response", value: data.avgResponseMinutes != null ? `${data.avgResponseMinutes}m` : "—" },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-5">
+          <div key={s.label} className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
             <p className="text-sm text-slate-500">{s.label}</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{s.value}</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{s.value}</p>
           </div>
         ))}
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Cases by Procedure</h2>
           <div className="mt-4 space-y-2">
             {data.byProcedure.length === 0 ? (
@@ -713,7 +714,7 @@ export function CompanyAnalyticsPage({ userName }: { userName: string }) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Coverage</h2>
           <dl className="mt-4 space-y-3">
             <div className="flex justify-between text-sm">

@@ -227,7 +227,7 @@ export function CoverageAlert() {
             <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
               New RepYo request
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900">
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
               {preview?.facilityName ?? "Coverage request"}
             </h2>
             <p className="mt-1 text-slate-600">{preview?.summary ?? "Device support requested"}</p>

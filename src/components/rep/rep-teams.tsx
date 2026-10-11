@@ -5,6 +5,7 @@ import { PortalShell } from "@/components/layout/portal-shell";
 import { Button } from "@/components/ui/button";
 import { fetchJson } from "@/lib/api-client";
 import { format } from "date-fns";
+import { LoadingState } from "@/components/ui/loading";
 
 interface TeamInfo {
   id: string;
@@ -102,7 +103,7 @@ export function RepTeamsPage({ userName, userId }: { userName: string; userId: s
 
   return (
     <PortalShell portal="rep" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">My Teams</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My Teams</h1>
       <p className="mt-1 text-sm text-slate-600">
         Team calendar shows shared assignments only. Your manager always sees your
         schedule — you cannot hide assignments from them.
@@ -115,7 +116,7 @@ export function RepTeamsPage({ userName, userId }: { userName: string; userId: s
       )}
 
       {loading ? (
-        <p className="mt-6 text-slate-500">Loading...</p>
+        <LoadingState className="mt-6" />
       ) : teams.length === 0 ? (
         <p className="mt-6 text-sm text-slate-500">
           You are not on a team yet. Ask your manager to add you.
@@ -125,7 +126,7 @@ export function RepTeamsPage({ userName, userId }: { userName: string; userId: s
           {teams.map((team) => (
             <div
               key={team.id}
-              className="rounded-xl border border-slate-200 bg-white p-5"
+              className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
             >
               <h2 className="text-lg font-semibold text-slate-900">{team.name}</h2>
               <p className="text-sm text-slate-600">

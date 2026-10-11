@@ -11,7 +11,7 @@ function renderMarkdown(content: string) {
   return content.split("\n").map((line, i) => {
     if (line.startsWith("# ")) {
       return (
-        <h1 key={i} className="mb-4 text-2xl font-bold text-slate-900">
+        <h1 key={i} className="mb-4 text-2xl font-semibold tracking-tight text-slate-900">
           {line.slice(2)}
         </h1>
       );

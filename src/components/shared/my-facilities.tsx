@@ -82,7 +82,7 @@ export function MyFacilitiesPage({
   return (
     <PortalShell portal={portal} userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">My Facilities</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">My Facilities</h1>
         <p className="mt-1 text-sm text-slate-600">{description}</p>
       </div>
 
@@ -99,7 +99,7 @@ export function MyFacilitiesPage({
         <p className="text-slate-500">Loading facilities...</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-5">
-          <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-3">
+          <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5 lg:col-span-3">
             <h2 className="font-semibold text-slate-900">Covered locations</h2>
             {sites.length === 0 ? (
               <p className="mt-4 text-sm text-slate-500">
@@ -141,7 +141,7 @@ export function MyFacilitiesPage({
             )}
           </section>
 
-          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+          <section className="space-y-4 rounded-xl border border-slate-200/80 bg-white shadow-card p-5 lg:col-span-2">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-rose-600" />
               <h2 className="font-semibold text-slate-900">Add facilities</h2>

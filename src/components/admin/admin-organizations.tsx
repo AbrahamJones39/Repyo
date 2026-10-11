@@ -139,7 +139,7 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
   return (
     <PortalShell portal="admin" userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Provider Organizations</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Provider Organizations</h1>
         <p className="text-sm text-slate-600">
           Configure verification methods, approved email domains, and user access
         </p>
@@ -184,7 +184,7 @@ export function AdminOrganizationsPage({ userName }: { userName: string }) {
             return (
               <div
                 key={org.id}
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>

@@ -70,7 +70,7 @@ export default async function CompanyPage() {
     <PortalShell portal="company" userName={session.user.name}>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{company?.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{company?.name}</h1>
           <p className="text-sm text-slate-600">
             Operational overview for your unit and reporting ladder. Patient information is not shown.
           </p>
@@ -82,7 +82,7 @@ export default async function CompanyPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5"
           >
             <div className="flex items-center justify-between">
               <p className="text-sm text-slate-600">{stat.label}</p>
@@ -93,7 +93,7 @@ export default async function CompanyPage() {
         ))}
       </div>
 
-      <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="font-semibold text-slate-900">Provider Requests</h2>

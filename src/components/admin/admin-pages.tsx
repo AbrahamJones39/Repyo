@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { fetchJson } from "@/lib/api-client";
 import { ROLE_LABELS } from "@/lib/auth-utils";
 import type { Role } from "@prisma/client";
+import { LoadingState } from "@/components/ui/loading";
 
 interface Company {
   id: string;
@@ -70,7 +71,7 @@ export function AdminTenantsPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="admin" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Tenants</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Tenants</h1>
       <p className="mt-1 text-sm text-slate-600">Device company management</p>
 
       {error && (
@@ -83,11 +84,11 @@ export function AdminTenantsPage({ userName }: { userName: string }) {
       </div>
 
       {loading ? (
-        <p className="mt-6 text-slate-500">Loading...</p>
+        <LoadingState className="mt-6" />
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {companies.map((c) => (
-            <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-5">
+            <div key={c.id} className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-slate-900">{c.name}</h3>
@@ -165,7 +166,7 @@ export function AdminUsersPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="admin" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Users</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Users</h1>
       <p className="mt-1 text-sm text-slate-600">{users.length} platform users</p>
 
       {error && (
@@ -187,12 +188,12 @@ export function AdminUsersPage({ userName }: { userName: string }) {
       </div>
 
       {loading ? (
-        <p className="mt-6 text-slate-500">Loading...</p>
+        <LoadingState className="mt-6" />
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Company</th>
@@ -201,7 +202,7 @@ export function AdminUsersPage({ userName }: { userName: string }) {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="border-b border-slate-50">
+                <tr key={u.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/60">
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-900">{u.name}</p>
                     <p className="text-xs text-slate-500">{u.email}</p>

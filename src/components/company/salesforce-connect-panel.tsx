@@ -71,7 +71,7 @@ export function SalesforceConnectPanel() {
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+    <div className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="font-semibold text-slate-900">Salesforce CRM</h2>

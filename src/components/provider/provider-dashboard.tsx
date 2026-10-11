@@ -7,9 +7,11 @@ import { RequestCard, type RequestData } from "@/components/shared/request-card"
 import { Button } from "@/components/ui/button";
 import { ApiError, connectEventSource, fetchJson } from "@/lib/api-client";
 import type { FacilityDefaults, RequesterDefaults } from "@/lib/request-form-types";
-import { Plus, RefreshCw, UserPlus } from "lucide-react";
+import { Inbox, Plus, RefreshCw, UserPlus } from "lucide-react";
+import { Segmented } from "@/components/ui/segmented";
 import { InviteModal } from "@/components/invitations/invite-modal";
 import { cn } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/loading";
 
 interface ProviderDashboardProps {
   userName: string;
@@ -115,16 +117,18 @@ export function ProviderDashboard({
 
   return (
     <PortalShell portal="provider" userName={userName}>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-sm text-slate-600">
-            {active.length} active request{active.length !== 1 ? "s" : ""}
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {loading
+              ? "Loading your requests…"
+              : `${active.length} active request${active.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadData}>
-            <RefreshCw className="h-4 w-4" />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={loadData} aria-label="Refresh" title="Refresh">
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
           <Button variant="outline" onClick={() => setShowInviteModal(true)}>
             <UserPlus className="h-4 w-4" />
@@ -149,42 +153,39 @@ export function ProviderDashboard({
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {([
-          ["all", "All"],
-          ["created", "Created by me"],
-          ["shared", "Shared with me"],
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setScope(value)}
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition",
-              scope === value
-                ? "bg-rose-600 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {label}
-            {value === "shared" && sharedCount > 0 ? ` (${sharedCount})` : ""}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        className="mb-5"
+        value={scope}
+        onChange={setScope}
+        options={[
+          { value: "all", label: "All", count: active.length },
+          { value: "created", label: "Created by me" },
+          { value: "shared", label: "Shared with me", count: sharedCount },
+        ]}
+      />
 
       {loading ? (
-        <p className="text-slate-500">Loading...</p>
+        <LoadingState />
       ) : visible.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center">
-          <p className="text-slate-600">
+        <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center">
+          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500">
+            <Inbox className="h-6 w-6" />
+          </span>
+          <p className="font-medium text-slate-700">
             {scope === "shared"
               ? "No requests have been shared with you."
               : scope === "created"
                 ? "No active requests you created."
                 : "No active requests"}
           </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {scope === "shared"
+              ? "When a coworker hands off a request, it'll show up here."
+              : "Need device support? Dispatch a rep in a few taps."}
+          </p>
           {scope !== "shared" && (
-            <Button className="mt-4" onClick={() => setShowModal(true)} disabled={companies.length === 0}>
+            <Button className="mt-5" onClick={() => setShowModal(true)} disabled={companies.length === 0}>
+              <Plus className="h-4 w-4" />
               Request a Rep
             </Button>
           )}

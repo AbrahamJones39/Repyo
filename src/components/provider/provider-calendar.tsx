@@ -115,7 +115,7 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
     <PortalShell portal="provider" userName={userName}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Calendar</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Calendar</h1>
           <p className="text-sm text-slate-600">
             Your scheduled rep requests and case coverage
           </p>
@@ -170,7 +170,7 @@ export function ProviderCalendarPage({ userName }: { userName: string }) {
         </span>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
         {viewMode === "day" ? (
           <CalendarDayView
             date={viewDate}

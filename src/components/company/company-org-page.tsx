@@ -176,7 +176,7 @@ export function CompanyOrgPage({
   return (
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Organization</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Organization</h1>
         {displayedCompany && (
           <p className="mt-1 text-sm font-semibold text-slate-800">{displayedCompany}</p>
         )}
@@ -207,7 +207,7 @@ export function CompanyOrgPage({
       ) : (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
               <h2 className="font-semibold text-slate-900">Structure</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Build the ladder your company actually uses. Nothing here is tied to a manufacturer.
@@ -224,7 +224,7 @@ export function CompanyOrgPage({
             </section>
 
             {data.canManageStructure && (
-              <form onSubmit={addUnit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+              <form onSubmit={addUnit} className="space-y-3 rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
                 <h2 className="font-semibold text-slate-900">Add unit</h2>
                 <Input
                   label="Name"
@@ -270,7 +270,7 @@ export function CompanyOrgPage({
             )}
           </div>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
             <h2 className="font-semibold text-slate-900">People</h2>
             <p className="mt-1 text-xs text-slate-500">
               Every rep has a designated manager. If that rep misses a request, it is rerouted to the manager.
@@ -314,7 +314,7 @@ export function CompanyOrgPage({
           {data.canAssignPeople && (
             <form
               onSubmit={assignMember}
-              className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+              className="space-y-3 rounded-xl border border-slate-200/80 bg-white shadow-card p-4"
             >
               <h2 className="font-semibold text-slate-900">Assign person</h2>
               <div className="grid gap-3 md:grid-cols-2">

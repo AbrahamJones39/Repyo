@@ -58,7 +58,7 @@ export function AdminSecurityPage({ userName }: { userName: string }) {
   return (
     <PortalShell portal="admin" userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Security & Audit</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Security & Audit</h1>
         <p className="text-sm text-slate-600">
           Kill switches, session revocation, PHI access logs, and permission history
         </p>
@@ -74,7 +74,7 @@ export function AdminSecurityPage({ userName }: { userName: string }) {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Emergency kill switch</h2>
           <p className="mt-1 text-xs text-slate-600">
             Disable access globally, per user, organization, company, or request.
@@ -123,7 +123,7 @@ export function AdminSecurityPage({ userName }: { userName: string }) {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Revoke user sessions</h2>
           <p className="mt-1 text-xs text-slate-600">
             Immediately invalidates all active sessions for a user.
@@ -149,7 +149,7 @@ export function AdminSecurityPage({ userName }: { userName: string }) {
         </section>
       </div>
 
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+      <section className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
         <h2 className="font-semibold text-slate-900">PHI access log</h2>
         <p className="mt-1 text-xs text-slate-600">
           Who opened requests, when PHI was displayed, and notification delivery — no PHI in log

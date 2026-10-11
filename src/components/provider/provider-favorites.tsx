@@ -6,6 +6,7 @@ import { RequestRepModal } from "@/components/provider/request-rep-modal";
 import { Button } from "@/components/ui/button";
 import { fetchJson } from "@/lib/api-client";
 import { Heart, Phone, Plus, Star, Trash2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading";
 
 interface FavoriteRep {
   id: string;
@@ -66,7 +67,7 @@ export function ProviderFavoritesPage({ userName }: { userName: string }) {
     <PortalShell portal="provider" userName={userName}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Favorite Reps</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Favorite Reps</h1>
           <p className="text-sm text-slate-600">Quick re-book your trusted reps</p>
         </div>
         <Button onClick={() => { setPreferredRepId(undefined); setShowModal(true); }} disabled={companies.length === 0}>
@@ -80,7 +81,7 @@ export function ProviderFavoritesPage({ userName }: { userName: string }) {
       )}
 
       {loading ? (
-        <p className="text-slate-500">Loading...</p>
+        <LoadingState />
       ) : favorites.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center">
           <Heart className="mx-auto h-10 w-10 text-slate-300" />
@@ -92,7 +93,7 @@ export function ProviderFavoritesPage({ userName }: { userName: string }) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {favorites.map((rep) => (
-            <div key={rep.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={rep.id} className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-slate-900">{rep.name}</h3>

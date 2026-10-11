@@ -47,13 +47,13 @@ export function AuthorizationDossierView({
       )}
 
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Authorization Dossier</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Authorization Dossier</h1>
         <p className="mt-1 text-sm text-slate-600">
           Verification and grant history for HIPAA audit review
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Identity summary
         </h2>
@@ -97,7 +97,7 @@ export function AuthorizationDossierView({
       </section>
 
       {dossier.territories.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Territories
           </h2>
@@ -117,7 +117,7 @@ export function AuthorizationDossierView({
       )}
 
       {dossier.products.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Products
           </h2>
@@ -136,7 +136,7 @@ export function AuthorizationDossierView({
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Authorization grants
         </h2>
@@ -206,7 +206,7 @@ export function AuthorizationDossierView({
         )}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Verification events
         </h2>

@@ -162,7 +162,7 @@ export function CompanyVerificationPanel() {
 
   if (loading) {
     return (
-      <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mt-8 rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <p className="text-sm text-slate-500">Loading verification settings...</p>
       </div>
     );
@@ -174,7 +174,7 @@ export function CompanyVerificationPanel() {
 
   return (
     <div className="mt-8 space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="font-semibold text-slate-900">User verification</h2>
         <p className="mt-1 text-sm text-slate-600">
           Directory, roster, and approved-domain matches are verified automatically.
@@ -260,7 +260,7 @@ export function CompanyVerificationPanel() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="font-semibold text-slate-900">Preapproved roster</h2>
         <p className="mt-1 text-sm text-slate-600">
           Paste one person per line: email, name, job title. Replaces the current roster.
@@ -287,7 +287,7 @@ export function CompanyVerificationPanel() {
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-6">
         <h2 className="font-semibold text-slate-900">Directory connections</h2>
         <p className="mt-1 text-sm text-slate-600">
           SCIM creates accounts. Directory sync records identities so signup auto-verifies

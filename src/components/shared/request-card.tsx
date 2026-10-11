@@ -4,7 +4,7 @@ import { StatusBadge, UrgencyBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusPipeline } from "@/components/shared/status-pipeline";
 import { format, isToday, isTomorrow } from "date-fns";
-import { Heart, MapPin, Phone, User, X, Cpu, ArrowRightLeft, Share2 } from "lucide-react";
+import { Heart, MapPin, Phone, X, Cpu, ArrowRightLeft, Share2, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api-client";
 import {
@@ -162,12 +162,12 @@ export function RequestCard({
     ["REQUESTING", "ACCEPTED"].includes(localRequest.status);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200/80 bg-white p-5 shadow-card transition-all duration-200 hover:border-slate-300/80 hover:shadow-card-hover">
       <div className="flex-1">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold text-slate-900">{localRequest.facilityName}</h3>
+              <h3 className="text-[15px] font-semibold leading-snug text-slate-900">{localRequest.facilityName}</h3>
               <UrgencyBadge urgency={localRequest.urgency} />
               {localRequest.alertActive && isAssignedRep && (
                 <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
@@ -226,7 +226,8 @@ export function RequestCard({
             {role !== "company" && localRequest.company && (
               <p className="text-xs text-slate-500">{localRequest.company.name}</p>
             )}
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/70">
+              <Clock className="h-3.5 w-3.5 text-slate-400" />
               {scheduleLabel(localRequest.scheduledAt)}
             </p>
           </div>
@@ -322,15 +323,25 @@ export function RequestCard({
         )}
 
         {localRequest.assignedRep && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-slate-400" />
-              <span className="font-medium">{localRequest.assignedRep.name}</span>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3 text-sm">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-rose-600 ring-1 ring-slate-200">
+                {localRequest.assignedRep.name
+                  .split(/\s+/)
+                  .map((part) => part[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Assigned rep</p>
+                <p className="truncate font-medium text-slate-900">{localRequest.assignedRep.name}</p>
+              </div>
             </div>
             {localRequest.assignedRep.phone && (
               <a
                 href={`tel:${localRequest.assignedRep.phone}`}
-                className="flex items-center gap-1 text-rose-600 hover:underline"
+                className="flex items-center gap-1 font-medium text-rose-600 hover:text-rose-700"
               >
                 <Phone className="h-4 w-4" />
                 Call
@@ -361,7 +372,7 @@ export function RequestCard({
         <p className="mt-2 text-xs text-red-600">{openError}</p>
       )}
 
-      <div className="mt-auto flex flex-col gap-2 pt-4">
+      <div className="mt-auto flex flex-col gap-2 pt-5">
         {role === "provider" && localRequest.isRequestOwner && (
           <Button size="sm" variant="outline" onClick={() => setShowShareModal(true)}>
             <Share2 className="h-4 w-4" />
@@ -401,7 +412,7 @@ export function RequestCard({
               <select
                 value={selectedRepId}
                 onChange={(e) => setSelectedRepId(e.target.value)}
-                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-sm shadow-sm shadow-slate-900/[0.03] focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400/20"
               >
                 <option value="">Assign rep...</option>
                 {availableReps.map((rep) => (

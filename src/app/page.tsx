@@ -135,7 +135,7 @@ export default async function HomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-8 py-3.5 text-base font-semibold text-slate-700 transition hover:border-rose-200 hover:bg-rose-50/50 sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white shadow-card px-8 py-3.5 text-base font-semibold text-slate-700 transition hover:border-rose-200 hover:bg-rose-50/50 sm:w-auto"
               >
                 Sign In
               </Link>

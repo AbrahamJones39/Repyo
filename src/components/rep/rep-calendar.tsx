@@ -230,7 +230,7 @@ export function RepCalendarPage({ userName }: { userName: string }) {
   return (
     <PortalShell portal="rep" userName={userName}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Calendar & Availability</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Calendar & Availability</h1>
         <p className="text-sm text-slate-600">
           Set your weekly hours and vacation. Providers cannot request you outside these times,
           and location/ETA sharing turns off when you are off.
@@ -248,7 +248,7 @@ export function RepCalendarPage({ userName }: { userName: string }) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-semibold text-slate-900">
                 {viewMode === "day"
@@ -462,7 +462,7 @@ export function RepCalendarPage({ userName }: { userName: string }) {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Weekly Hours</h2>
               <Button size="sm" variant="outline" onClick={addRule}>
@@ -513,7 +513,7 @@ export function RepCalendarPage({ userName }: { userName: string }) {
             </Button>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
             <h2 className="font-semibold text-slate-900">Schedule Vacation</h2>
             <div className="mt-3 space-y-3">
               <Input
@@ -540,7 +540,7 @@ export function RepCalendarPage({ userName }: { userName: string }) {
           </div>
 
           {blocks.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
               <h2 className="font-semibold text-slate-900">Time Off</h2>
               <ul className="mt-3 space-y-2">
                 {blocks.map((block) => (

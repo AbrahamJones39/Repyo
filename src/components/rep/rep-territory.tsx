@@ -11,6 +11,7 @@ import {
 import { fetchJson } from "@/lib/api-client";
 import { PROCEDURE_TYPES, REP_STATUS_LABELS } from "@/lib/utils";
 import { Plus, Trash2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/loading";
 
 interface Territory {
   state: string;
@@ -128,7 +129,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
   if (loading) {
     return (
       <PortalShell portal="rep" userName={userName}>
-        <p className="text-slate-500">Loading...</p>
+        <LoadingState />
       </PortalShell>
     );
   }
@@ -145,7 +146,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
 
   return (
     <PortalShell portal="rep" userName={userName}>
-      <h1 className="text-2xl font-bold text-slate-900">Territory & Profile</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Territory & Profile</h1>
       <p className="mt-1 text-sm text-slate-600">{profile.user.company?.name}</p>
 
       {error && (
@@ -153,7 +154,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Current Status</h2>
           <p className="mt-2 text-sm text-slate-600">
             {REP_STATUS_LABELS[profile.status] ?? profile.status}
@@ -163,7 +164,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5">
           <h2 className="font-semibold text-slate-900">Travel Settings</h2>
           <div className="mt-4">
             <Input
@@ -177,7 +178,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5 lg:col-span-2">
           <h2 className="font-semibold text-slate-900">Products</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             {PROCEDURE_TYPES.map((p) => (
@@ -196,7 +197,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5 lg:col-span-2">
           <FacilitySearchPicker
             selected={coveredSites}
             onChange={setCoveredSites}
@@ -206,7 +207,7 @@ export function RepTerritoryPage({ userName }: { userName: string }) {
           />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-5 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-slate-900">Legacy zip notes</h2>

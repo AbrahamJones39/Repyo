@@ -117,7 +117,7 @@ export function CompanyCalendarPage({ userName }: { userName: string }) {
     <PortalShell portal="company" userName={userName}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Rep Calendar</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Rep Calendar</h1>
           <p className="text-sm text-slate-600">
             View schedules, time off, and assigned cases across your team
           </p>
@@ -187,7 +187,7 @@ export function CompanyCalendarPage({ userName }: { userName: string }) {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
         {viewMode === "day" ? (
           <CalendarDayView
             date={viewDate}
